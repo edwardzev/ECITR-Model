@@ -1,0 +1,32 @@
+[
+  {
+    "scenario_id": "graph_enrichment_fresh_001",
+    "graph_mode": "fresh",
+    "expected": {
+      "graph_snapshot_used": true,
+      "explanation_count_added": 4,
+      "stale_or_missing_skip_count": 0,
+      "wrong_scope_suppression_count": 0
+    }
+  },
+  {
+    "scenario_id": "graph_enrichment_missing_001",
+    "graph_mode": "missing",
+    "expected": {
+      "graph_snapshot_used": false,
+      "explanation_count_added": 0,
+      "stale_or_missing_skip_count": 1,
+      "wrong_scope_suppression_count": 0
+    }
+  },
+  {
+    "scenario_id": "graph_enrichment_stale_001",
+    "graph_mode": "stale",
+    "expected": {
+      "graph_snapshot_used": false,
+      "explanation_count_added": 0,
+      "stale_or_missing_skip_count": 1,
+      "wrong_scope_suppression_count": 0
+    }
+  }
+]

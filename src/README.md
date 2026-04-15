@@ -8,6 +8,7 @@ Implementation code will be split by layer and adapters:
 - `retrieval/`
 - `retrieval/embedders/`
 - `retrieval/semantic-backends/`
+- `support-graph/`
 - `orchestrator/`
 - `storage/`
 - `review/`
@@ -30,4 +31,5 @@ The first implementation surface is:
 - pluggable semantic backend seam
 - Qdrant-backed semantic backend prototype
 - local deterministic embedder for prototype sync and benchmark runs
+- derived support-graph snapshots, diffs, and internal graph queries
 - orchestrator delegation runtime

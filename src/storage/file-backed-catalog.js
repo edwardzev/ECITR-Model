@@ -40,6 +40,20 @@ const RECORD_DEFINITIONS = Object.freeze({
     runtimeKey: "atomic_claim_sets",
     lifecycle: false,
   }),
+  parameter_definition: Object.freeze({
+    directory: "parameter-definitions",
+    schemaKey: "parameter_definition",
+    idKey: "definition_id",
+    runtimeKey: "parameter_definitions",
+    lifecycle: false,
+  }),
+  parameter_observation: Object.freeze({
+    directory: "parameter-observations",
+    schemaKey: "parameter_observation",
+    idKey: "observation_id",
+    runtimeKey: "parameter_observations",
+    lifecycle: false,
+  }),
   review_audit_entry: Object.freeze({
     directory: "review-audit-entries",
     schemaKey: "review_audit_entry",

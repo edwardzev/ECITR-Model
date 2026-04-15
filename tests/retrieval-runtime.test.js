@@ -7,7 +7,9 @@ const path = require("node:path");
 const { readJson } = require("../src/validation/validator");
 const { REPO_ROOT } = require("../src/validation/schema-registry");
 const { RetrievalRuntime } = require("../src/retrieval/runtime");
+const { refreshSupportGraph } = require("../src/support-graph/refresh");
 const { FileBackedCatalog } = require("../src/storage/file-backed-catalog");
+const { loadExample } = require("./helpers/load-example");
 const { buildExampleCatalog } = require("./helpers/example-catalog");
 
 test("retrieval runtime returns grouped results from execution lanes", async () => {
@@ -81,6 +83,130 @@ test("retrieval runtime can surface evidence through atomic-claim semantic text"
   const { response } = await runtime.execute({ request, catalogs, now: new Date("2026-05-01T00:00:00Z") });
 
   assert.deepEqual(response.results.evidence, ["ev_mem_20260410_001"]);
+});
+
+test("retrieval runtime can surface parameter-linked evidence, cases, and tactics without a new top-level layer", async () => {
+  const runtime = new RetrievalRuntime();
+  const catalogs = buildExampleCatalog();
+  const request = {
+    request_id: "req_runtime_parameter_001",
+    query: "ECITR_QDRANT_URL",
+    project_scope: "project_family",
+    intent: "analysis",
+  };
+
+  const { response } = await runtime.execute({ request, catalogs, now: new Date("2026-05-01T00:00:00Z") });
+
+  assert.ok(response.results.tactics.includes("tac_metadata_prune_before_vector_rank_001"));
+  assert.ok(response.results.cases.includes("case_retrieval_scope_drift_001"));
+  assert.ok(response.results.evidence.includes("ev_mem_20260410_001"));
+});
+
+test("retrieval runtime excludes parameterized case hits when the parameter observation is superseded", async () => {
+  const runtime = new RetrievalRuntime();
+  const catalogs = buildExampleCatalog();
+  catalogs.cases[0].parameter_observation_refs = ["paramobs_stale_case_parameter"];
+  catalogs.parameter_definitions = [
+    ...catalogs.parameter_definitions,
+    {
+      definition_id: "paramdef_stale_case_parameter",
+      observed_key: "SERVICE_URL",
+      normalized_key: "service_url",
+      value_type: "string",
+      created_at: "2026-04-10T11:00:00Z",
+      first_observed_at: "2026-04-10T11:00:00Z",
+      first_source_evidence_ref: "ev_mem_20260410_001",
+    },
+  ];
+  catalogs.parameter_observations = [
+    ...catalogs.parameter_observations,
+    {
+      observation_id: "paramobs_stale_case_parameter",
+      definition_id: "paramdef_stale_case_parameter",
+      parameter_key: "SERVICE_URL",
+      raw_value_text: "http://stale.local",
+      value_type: "string",
+      value_json: "http://stale.local",
+      observation_kind: "set",
+      observed_at: "2026-04-10T11:00:00Z",
+      project_scope: "project_family",
+      source_evidence_refs: ["ev_mem_20260410_001"],
+      source_spans: [
+        {
+          path: "config.service.url",
+          start_line: 1,
+          end_line: 1,
+          start_char: 0,
+          end_char: 29,
+          quote: "SERVICE_URL=http://stale.local",
+        },
+      ],
+      strategy_id: "parameter-distiller-file-v1",
+      extracted_at: "2026-04-10T11:00:00Z",
+      extracted_by: "parameter-distiller",
+      confidence: 0.9,
+    },
+    {
+      observation_id: "paramobs_current_case_parameter",
+      definition_id: "paramdef_stale_case_parameter",
+      parameter_key: "SERVICE_URL",
+      raw_value_text: "http://current.local",
+      value_type: "string",
+      value_json: "http://current.local",
+      observation_kind: "set",
+      observed_at: "2026-04-10T11:05:00Z",
+      project_scope: "project_family",
+      source_evidence_refs: ["ev_mem_20260410_001"],
+      source_spans: [
+        {
+          path: "config.service.url",
+          start_line: 2,
+          end_line: 2,
+          start_char: 0,
+          end_char: 31,
+          quote: "SERVICE_URL=http://current.local",
+        },
+      ],
+      strategy_id: "parameter-distiller-file-v1",
+      extracted_at: "2026-04-10T11:05:00Z",
+      extracted_by: "parameter-distiller",
+      confidence: 0.9,
+      supersedes: "paramobs_stale_case_parameter",
+    },
+  ];
+
+  const request = {
+    request_id: "req_runtime_parameter_002",
+    query: "http://stale.local",
+    project_scope: "project_family",
+    intent: "analysis",
+  };
+
+  const { response } = await runtime.execute({ request, catalogs, now: new Date("2026-05-01T00:00:00Z") });
+  assert.deepEqual(response.results.cases, []);
+});
+
+test("retrieval runtime excludes wrong-scope parameterized evidence and cases", async () => {
+  const runtime = new RetrievalRuntime();
+  const catalogs = buildExampleCatalog();
+  catalogs.cases[0].context.project_scope = "project";
+  catalogs.evidence[0].project_scope = "project";
+
+  const request = {
+    request_id: "req_runtime_parameter_scope_001",
+    query: "ECITR_QDRANT_URL",
+    project_scope: "project_family",
+    intent: "analysis",
+    allowed_layers: ["cases", "evidence"],
+    max_results_per_layer: {
+      cases: 3,
+      evidence: 3,
+    },
+  };
+
+  const { response } = await runtime.execute({ request, catalogs, now: new Date("2026-05-01T00:00:00Z") });
+  assert.deepEqual(response.results.cases, []);
+  assert.deepEqual(response.results.evidence, []);
 });
 
 test("retrieval runtime can surface imported run evidence through payload-derived text", async () => {
@@ -181,6 +307,76 @@ test("retrieval runtime can surface imported session evidence through payload-de
   assert.deepEqual(response.results.evidence, ["ev_aops_session_test_001"]);
 });
 
+test("fresh support-graph explanations do not change retrieval results or ordering", async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-runtime-graph-fresh-"));
+  const graphRoot = path.join(rootDir, ".local", "support-graph");
+  const catalog = materializeExampleCatalog(rootDir);
+  refreshSupportGraph({
+    catalogRoot: rootDir,
+    graphRoot,
+    builtAt: "2026-05-01T00:00:00.000Z",
+  });
+
+  const request = {
+    request_id: "req_runtime_graph_explanations_001",
+    query: "scope filter ranking project retrieval",
+    project_scope: "project_family",
+    intent: "analysis",
+  };
+  const catalogs = catalog.loadRuntimeCatalogs();
+  const baselineRuntime = new RetrievalRuntime({ responseEnricher: null });
+  const enrichedRuntime = new RetrievalRuntime({ graphRoot });
+
+  const { response: baselineResponse } = await baselineRuntime.execute({
+    request,
+    catalogs,
+    now: new Date("2026-05-01T00:00:00Z"),
+  });
+  const { response: enrichedResponse } = await enrichedRuntime.execute({
+    request,
+    catalogs,
+    now: new Date("2026-05-01T00:00:00Z"),
+  });
+
+  assert.deepEqual(enrichedResponse.results, baselineResponse.results);
+  assert.equal(enrichedResponse.explanations.length, baselineResponse.explanations.length + 4);
+  assert.ok(enrichedResponse.explanations.some((line) =>
+    line.includes("graph support: tactic tac_metadata_prune_before_vector_rank_001 linked to case case_retrieval_scope_drift_001")));
+  assert.ok(enrichedResponse.explanations.some((line) =>
+    line.includes("graph support: evidence ev_mem_20260410_001 linked to source artifact")));
+});
+
+test("stale support-graph snapshots are ignored during explanation enrichment", async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-runtime-graph-stale-"));
+  const graphRoot = path.join(rootDir, ".local", "support-graph");
+  const catalog = materializeExampleCatalog(rootDir);
+  refreshSupportGraph({
+    catalogRoot: rootDir,
+    graphRoot,
+    builtAt: "2026-05-01T00:00:00.000Z",
+  });
+
+  const catalogs = catalog.loadRuntimeCatalogs();
+  catalogs.tactics[0].revalidate_at = "2026-08-01T00:00:00Z";
+  const request = {
+    request_id: "req_runtime_graph_stale_001",
+    query: "scope filter ranking project retrieval",
+    project_scope: "project_family",
+    intent: "analysis",
+  };
+  const runtime = new RetrievalRuntime({ graphRoot });
+  const { response } = await runtime.execute({
+    request,
+    catalogs,
+    now: new Date("2026-05-01T00:00:00Z"),
+  });
+
+  assert.equal(
+    response.explanations.filter((line) => line.startsWith("graph support:")).length,
+    0,
+  );
+});
+
 test("retrieval runtime baseline scenarios stay stable", async () => {
   const runtime = new RetrievalRuntime();
   const catalogs = buildExampleCatalog();
@@ -258,3 +454,21 @@ test("retrieval runtime executes lanes in parallel", async () => {
   assert.equal(outcome, "completed");
   assert.deepEqual(events.slice(0, 2), ["lane-1-start", "lane-2-start"]);
 });
+
+function materializeExampleCatalog(rootDir) {
+  const catalog = new FileBackedCatalog({ rootDir });
+
+  for (const recordType of [
+    "evidence",
+    "case",
+    "invariant",
+    "tactic",
+    "atomic_claim_set",
+    "parameter_definition",
+    "parameter_observation",
+  ]) {
+    catalog.writeRecord(recordType, loadExample(recordType));
+  }
+
+  return catalog;
+}

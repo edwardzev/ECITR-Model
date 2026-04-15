@@ -12,6 +12,7 @@ const { FileBackedCatalog } = require("../storage/file-backed-catalog");
 const { reconcileOpenPools } = require("./open-pool-reconciler");
 const { REPO_ROOT } = require("../validation/schema-registry");
 const { defaultSyncCatalog, DEFAULT_COLLECTION_NAME, DEFAULT_QDRANT_URL } = require("../importers/agent-ops-refresh");
+const { refreshSupportGraph } = require("../support-graph/refresh");
 
 const DEFAULT_INVARIANT_BENCHMARK_MANIFEST = path.join(
   REPO_ROOT,
@@ -26,10 +27,12 @@ const DEFAULT_TACTIC_BENCHMARK_MANIFEST = path.join(
   "tactic-discovery-benchmark.v1.json",
 );
 const DEFAULT_REPORT_DIR = path.join(REPO_ROOT, ".local", "reports", "governed-promotions");
+const DEFAULT_SUPPORT_GRAPH_ROOT = path.join(REPO_ROOT, ".local", "support-graph");
 
 async function runGovernedPromotion({
   catalogRoot = DEFAULT_CATALOG_ROOT,
   reportDir = DEFAULT_REPORT_DIR,
+  supportGraphRoot = DEFAULT_SUPPORT_GRAPH_ROOT,
   invariantManifestPath = DEFAULT_INVARIANT_BENCHMARK_MANIFEST,
   tacticManifestPath = DEFAULT_TACTIC_BENCHMARK_MANIFEST,
   caseBatchLimit = Number.MAX_SAFE_INTEGER,
@@ -46,6 +49,7 @@ async function runGovernedPromotion({
   openAIOrganization = process.env.OPENAI_ORGANIZATION,
   openAIProject = process.env.OPENAI_PROJECT,
   syncCatalog = defaultSyncCatalog,
+  supportGraphRefresher = refreshSupportGraph,
   dryRun = false,
   skipQdrantSync = false,
   caseBatchRunner = runCaseBatch,
@@ -70,6 +74,7 @@ async function runGovernedPromotion({
     reconciliation: null,
     invariants: null,
     tactics: null,
+    support_graph: null,
     qdrant_sync: null,
   };
 
@@ -115,6 +120,13 @@ async function runGovernedPromotion({
     catalogRoot: resolvedCatalogRoot,
     reconciledAt: reviewedAt,
     dryRun,
+  });
+
+  report.support_graph = supportGraphRefresher({
+    graphRoot: supportGraphRoot,
+    catalogRoot: resolvedCatalogRoot,
+    dryRun,
+    builtAt: reviewedAt,
   });
 
   if (skipQdrantSync || dryRun) {

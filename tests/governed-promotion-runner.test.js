@@ -176,6 +176,69 @@ test("candidate promotion helper records blocked promotions without aborting the
   assert.equal(result.blocked[0].proposed_id, "tac_bad");
 });
 
+test("governed promotion refreshes the support graph before downstream sync", async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-governed-promotion-"));
+  const manifestPath = path.join(rootDir, "empty.json");
+  const events = [];
+
+  fs.writeFileSync(
+    manifestPath,
+    `${JSON.stringify({ entries: [] }, null, 2)}\n`,
+    "utf8",
+  );
+
+  const result = await runGovernedPromotion({
+    catalogRoot: rootDir,
+    reportDir: path.join(rootDir, "reports"),
+    supportGraphRoot: path.join(rootDir, "support-graph"),
+    dryRun: false,
+    skipQdrantSync: false,
+    caseBatchRunner() {
+      return {
+        batch_id: "batch-graph-order",
+        total_cases: 0,
+        approved: 0,
+        errors: 0,
+        results: [],
+      };
+    },
+    invariantManifestPath: manifestPath,
+    tacticManifestPath: manifestPath,
+    invariantBenchmarkRunner() {
+      return createCleanBenchmark("invariant-bench");
+    },
+    tacticBenchmarkRunner() {
+      return createCleanBenchmark("tactic-bench");
+    },
+    invariantReviewSurface: createFakeReviewSurface({
+      kind: "invariant",
+      identities: {},
+    }),
+    tacticReviewSurface: createFakeReviewSurface({
+      kind: "tactic",
+      identities: {},
+    }),
+    supportGraphRefresher() {
+      events.push("graph");
+      return {
+        status: "updated",
+        changed: true,
+        node_count: 0,
+        edge_count: 0,
+      };
+    },
+    syncCatalog() {
+      events.push("qdrant");
+      return {
+        status: "synced",
+      };
+    },
+  });
+
+  assert.deepEqual(events, ["graph", "qdrant"]);
+  assert.equal(result.support_graph.status, "updated");
+});
+
 function createCleanBenchmark(benchmarkId) {
   return {
     benchmark_id: benchmarkId,

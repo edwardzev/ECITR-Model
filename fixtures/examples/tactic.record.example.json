@@ -11,10 +11,13 @@
     "case_retrieval_scope_drift_001"
   ],
   "supporting_invariant_refs": [
-    "inv_retrieval_scope_filtering_001"
+    "inv_scope_filter_before_rank_001"
   ],
   "evidence_refs": [
     "ev_mem_20260410_001"
+  ],
+  "parameter_observation_refs": [
+    "paramobs_ecitr_qdrant_url_ev_mem_20260410_001"
   ],
   "tool_binding": [
     "hybrid-retrieval",

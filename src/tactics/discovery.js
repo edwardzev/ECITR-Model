@@ -88,6 +88,7 @@ class TacticDiscoverySurface {
       source_case_refs: caseInspection.map((item) => item.case_id),
       supporting_invariant_refs: invariantInspection.map((item) => item.invariant_id),
       evidence_refs: entry.evidence_refs ?? collectEvidenceRefs(sourceCases),
+      parameter_observation_refs: [...(entry.parameter_observation_refs ?? [])],
       tool_binding: [...(entry.tool_binding ?? [])],
       tool_version_bounds: String(entry.tool_version_bounds ?? "").trim(),
       environment_bounds: [...(entry.environment_bounds ?? [])],
@@ -257,6 +258,7 @@ function buildPacketPreview(packet, supportingInvariants) {
     source_case_refs: packet.source_case_refs,
     supporting_invariant_refs: supportingInvariants.map((invariant) => invariant.id),
     evidence_ref_count: packet.evidence_refs.length,
+    parameter_observation_refs: packet.parameter_observation_refs ?? [],
     tool_binding: packet.tool_binding,
   };
 }

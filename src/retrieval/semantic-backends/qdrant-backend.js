@@ -2,6 +2,7 @@ const crypto = require("node:crypto");
 
 const { SemanticRetrievalBackend } = require("../semantic-backend-interface");
 const { buildEvidenceRetrievalText } = require("../evidence-text");
+const { buildParameterIndexes, buildParameterSummaryForRecord } = require("../../parameters/retrieval");
 
 const DEFAULT_DENSE_VECTOR_NAME = "dense";
 const DEFAULT_SPARSE_VECTOR_NAME = "sparse";
@@ -312,6 +313,7 @@ async function exportRecordsToQdrantPoints({
 
 function buildExportRecords(catalogs, { embeddingSignature = null } = {}) {
   const atomicClaimsByEvidence = buildAtomicClaimIndex(catalogs.atomic_claim_sets ?? []);
+  const parameterIndexes = buildParameterIndexes(catalogs);
   const exported = [];
 
   for (const layer of ["tactics", "invariants", "cases", "evidence"]) {
@@ -329,6 +331,7 @@ function buildExportRecords(catalogs, { embeddingSignature = null } = {}) {
         reviewState: layer === "cases" ? record.review_state ?? null : null,
         contextualText: buildContextualText(layer, record, atomicClaimsByEvidence, {
           catalogRoot: catalogs.__catalogRoot,
+          parameterIndexes,
         }),
         record: structuredClone(record),
       });
@@ -350,7 +353,7 @@ function buildExportRecords(catalogs, { embeddingSignature = null } = {}) {
   return exported;
 }
 
-function buildContextualText(layer, record, atomicClaimsByEvidence, { catalogRoot } = {}) {
+function buildContextualText(layer, record, atomicClaimsByEvidence, { catalogRoot, parameterIndexes } = {}) {
   const header = [
     `Layer: ${layer}.`,
     `Project scope: ${getProjectScope(layer, record)}.`,
@@ -366,6 +369,7 @@ function buildContextualText(layer, record, atomicClaimsByEvidence, { catalogRoo
         `Action: ${record.action}.`,
         `Steps: ${(record.steps ?? []).join(" ")}`,
         `Fallbacks: ${(record.fallbacks ?? []).join(" ")}`,
+        buildParameterSummaryForRecord(layer, record, parameterIndexes),
       ].join(" ");
     case "invariants":
       return [
@@ -385,6 +389,7 @@ function buildContextualText(layer, record, atomicClaimsByEvidence, { catalogRoo
         `Failure mode: ${record.failure_mode}.`,
         `Apply when: ${(record.applicability?.when_to_apply ?? []).join(" ")}`,
         `Do not apply when: ${(record.applicability?.when_not_to_apply ?? []).join(" ")}`,
+        buildParameterSummaryForRecord(layer, record, parameterIndexes),
       ].filter(Boolean).join(" ");
     case "evidence":
       return [
@@ -392,6 +397,7 @@ function buildContextualText(layer, record, atomicClaimsByEvidence, { catalogRoo
         buildEvidenceRetrievalText(record, {
           catalogRoot,
           atomicClaims: atomicClaimsByEvidence.get(record.evidence_id) ?? [],
+          parameterIndexes,
         }),
       ].join(" ");
     default:

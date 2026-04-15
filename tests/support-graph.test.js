@@ -1,0 +1,188 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+
+const { FileBackedCatalog } = require("../src/storage/file-backed-catalog");
+const { buildSupportGraphSnapshot } = require("../src/support-graph/build");
+const { buildSupportGraphDiff } = require("../src/support-graph/diff");
+const { expandRelated, findShortestPath, listNeighbors } = require("../src/support-graph/query");
+const { loadLatestDiff, loadLatestSnapshot, refreshSupportGraph } = require("../src/support-graph/refresh");
+const { buildExampleCatalog } = require("./helpers/example-catalog");
+const { loadExample } = require("./helpers/load-example");
+
+test("support-graph snapshot is deterministic for the example catalog", () => {
+  const builtAt = "2026-04-15T10:00:00.000Z";
+  const first = buildSupportGraphSnapshot({
+    catalogs: buildExampleCatalog(),
+    builtAt,
+  });
+  const second = buildSupportGraphSnapshot({
+    catalogs: buildExampleCatalog(),
+    builtAt,
+  });
+
+  assert.deepEqual(first, second);
+  assert.equal(first.node_count, 8);
+  assert.ok(first.edges.some((edge) => edge.kind === "evidence_parameter_observation"));
+  assert.ok(first.edges.some((edge) => edge.kind === "tactic_supporting_invariant"));
+});
+
+test("support-graph query helpers return neighbors, shortest paths, and related canonical records", () => {
+  const snapshot = buildSupportGraphSnapshot({
+    catalogs: buildExampleCatalog(),
+    builtAt: "2026-04-15T10:05:00.000Z",
+  });
+
+  const neighbors = listNeighbors({
+    snapshot,
+    nodeId: "tac_metadata_prune_before_vector_rank_001",
+  });
+  assert.ok(neighbors.some((entry) => entry.node.record_id === "case_retrieval_scope_drift_001"));
+  assert.ok(neighbors.some((entry) => entry.node.record_id === "inv_scope_filter_before_rank_001"));
+
+  const pathResult = findShortestPath({
+    snapshot,
+    from: "tac_metadata_prune_before_vector_rank_001",
+    to: "paramdef_ecitr_qdrant_url",
+  });
+  assert.deepEqual(pathResult.node_path, [
+    "tactic:tac_metadata_prune_before_vector_rank_001",
+    "parameter_observation:paramobs_ecitr_qdrant_url_ev_mem_20260410_001",
+    "parameter_definition:paramdef_ecitr_qdrant_url",
+  ]);
+
+  const related = expandRelated({
+    snapshot,
+    nodeId: "ev_mem_20260410_001",
+    maxDepth: 2,
+  });
+  assert.ok(related.some((entry) => entry.node.record_id === "case_retrieval_scope_drift_001"));
+  assert.ok(related.some((entry) => entry.node.record_id === "tac_metadata_prune_before_vector_rank_001"));
+});
+
+test("support-graph refresh writes snapshots, skips unchanged graphs, and emits diffs for structural changes", () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-support-graph-"));
+  const graphRoot = path.join(rootDir, "support-graph");
+  const catalog = new FileBackedCatalog({ rootDir });
+
+  for (const recordType of [
+    "evidence",
+    "case",
+    "invariant",
+    "tactic",
+    "atomic_claim_set",
+    "parameter_definition",
+    "parameter_observation",
+  ]) {
+    catalog.writeRecord(recordType, loadExample(recordType));
+  }
+
+  const first = refreshSupportGraph({
+    catalogRoot: rootDir,
+    graphRoot,
+    builtAt: "2026-04-15T10:10:00.000Z",
+  });
+  assert.equal(first.status, "initialized");
+  assert.equal(first.changed, true);
+  assert.ok(first.snapshot_path);
+  assert.ok(fs.existsSync(first.snapshot_path));
+
+  const second = refreshSupportGraph({
+    catalogRoot: rootDir,
+    graphRoot,
+    builtAt: "2026-04-15T10:11:00.000Z",
+  });
+  assert.equal(second.status, "unchanged");
+  assert.equal(second.changed, false);
+
+  const addedEvidence = structuredClone(loadExample("evidence"));
+  addedEvidence.evidence_id = "ev_support_graph_added_001";
+  addedEvidence.substrate_ref = "file:///tmp/support-graph-added.json";
+  addedEvidence.source_locator = "/tmp/support-graph-added.json";
+  addedEvidence.verbatim_payload_ref = "payloads/evidence/tests/support-graph/2026/04/ev_support_graph_added_001.json";
+  addedEvidence.payload_hash = "sha256:support-graph-added";
+  addedEvidence.source_hash = "sha256:support-graph-added";
+  catalog.writeRecord("evidence", addedEvidence);
+
+  const third = refreshSupportGraph({
+    catalogRoot: rootDir,
+    graphRoot,
+    builtAt: "2026-04-15T10:12:00.000Z",
+  });
+  assert.equal(third.status, "updated");
+  assert.equal(third.changed, true);
+  assert.ok(third.diff_path);
+  assert.ok(third.diff_summary.added_nodes >= 2);
+
+  const latestSnapshot = loadLatestSnapshot({ graphRoot });
+  const latestDiff = loadLatestDiff({ graphRoot });
+  assert.equal(latestSnapshot.build_id, third.snapshot_build_id);
+  assert.equal(latestDiff.next_snapshot_build_id, third.snapshot_build_id);
+});
+
+test("support-graph diff reports edge and neighborhood changes for canonical records", () => {
+  const catalogs = buildExampleCatalog();
+  const previousSnapshot = buildSupportGraphSnapshot({
+    catalogs,
+    builtAt: "2026-04-15T10:15:00.000Z",
+  });
+
+  const nextCatalogs = buildExampleCatalog();
+  nextCatalogs.tactics[0].supporting_invariant_refs = [];
+  const nextSnapshot = buildSupportGraphSnapshot({
+    catalogs: nextCatalogs,
+    builtAt: "2026-04-15T10:16:00.000Z",
+  });
+
+  const diff = buildSupportGraphDiff({
+    previousSnapshot,
+    nextSnapshot,
+    generatedAt: "2026-04-15T10:16:30.000Z",
+  });
+
+  assert.equal(diff.summary.removed_edges, 1);
+  assert.ok(diff.removed_edges.some((edge) => edge.kind === "tactic_supporting_invariant"));
+  assert.ok(diff.changed_neighborhoods.some((entry) => entry.node_id === "tactic:tac_metadata_prune_before_vector_rank_001"));
+});
+
+test("support-graph refresh rewrites stale basis hashes even when the graph structure is unchanged", () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-support-graph-basis-"));
+  const graphRoot = path.join(rootDir, "support-graph");
+  const catalog = new FileBackedCatalog({ rootDir });
+
+  for (const recordType of [
+    "evidence",
+    "case",
+    "invariant",
+    "tactic",
+    "atomic_claim_set",
+    "parameter_definition",
+    "parameter_observation",
+  ]) {
+    catalog.writeRecord(recordType, loadExample(recordType));
+  }
+
+  const first = refreshSupportGraph({
+    catalogRoot: rootDir,
+    graphRoot,
+    builtAt: "2026-04-15T10:20:00.000Z",
+  });
+  const stored = structuredClone(loadExample("tactic"));
+  stored.revalidate_at = "2026-08-01T00:00:00Z";
+  catalog.writeRecord("tactic", stored, { overwrite: true });
+
+  const second = refreshSupportGraph({
+    catalogRoot: rootDir,
+    graphRoot,
+    builtAt: "2026-04-15T10:21:00.000Z",
+  });
+
+  assert.equal(second.status, "updated");
+  assert.equal(second.changed, true);
+  assert.equal(second.fingerprint, first.fingerprint);
+  assert.notEqual(second.basis_hash, first.basis_hash);
+  assert.equal(second.diff_path, null);
+  assert.equal(second.diff_summary, null);
+});

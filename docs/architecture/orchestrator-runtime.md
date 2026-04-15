@@ -19,6 +19,18 @@ It does not improvise hidden ownership.
 5. mark whether orchestrator review remains required
 6. emit a delegation plan
 
+## Retrieval Hook
+
+The execution loop may now accept either:
+- an explicit `retrievalRequest`
+- or a runtime `intervention` input
+
+Rules:
+- explicit `retrievalRequest` wins and preserves the existing behavior
+- `intervention` is an adapter-owned runtime hook, not a new task or retrieval schema
+- intervention execution still returns normal retrieval output plus a smaller intervention envelope
+- intervention artifacts remain derived `.local` files rather than catalog records
+
 ## Role Rule
 
 Every routed task must name:

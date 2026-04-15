@@ -32,6 +32,9 @@
   "evidence_refs": [
     "ev_mem_20260410_001"
   ],
+  "parameter_observation_refs": [
+    "paramobs_ecitr_qdrant_url_ev_mem_20260410_001"
+  ],
   "authoring_agent": "case-steward",
   "review_state": "approved",
   "confidence": 0.88,

@@ -221,6 +221,8 @@ function countCatalogRecords(catalogs) {
     cases: catalogs.cases?.length ?? 0,
     evidence: catalogs.evidence?.length ?? 0,
     atomic_claim_sets: catalogs.atomic_claim_sets?.length ?? 0,
+    parameter_definitions: catalogs.parameter_definitions?.length ?? 0,
+    parameter_observations: catalogs.parameter_observations?.length ?? 0,
     review_audit_entries: catalogs.review_audit_entries?.length ?? 0,
   };
 }

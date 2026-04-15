@@ -12,6 +12,7 @@ test("tactic promotion compiles a draft tactic from a staging packet", () => {
 
   assert.equal(draft.status, "draft");
   assert.equal(draft.id, packet.proposed_tactic_id);
+  assert.deepEqual(draft.parameter_observation_refs, packet.parameter_observation_refs);
 });
 
 test("tactic activation rejects already stale tactics", () => {

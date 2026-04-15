@@ -2,12 +2,14 @@ const { ReviewWorkflow } = require("../review/workflow");
 const { RetrievalRuntime } = require("../retrieval/runtime");
 const { FileBackedCatalog } = require("../storage/file-backed-catalog");
 const { OrchestratorRuntime } = require("./delegation-runtime");
+const { RuntimeInterventionRunner } = require("../runtime/intervention-runner");
 
 class OrchestratorExecutionLoop {
   constructor({
     catalog,
     router = new OrchestratorRuntime(),
     retrievalRuntime = new RetrievalRuntime(),
+    interventionRunner = new RuntimeInterventionRunner({ retrievalRuntime }),
     reviewWorkflow = new ReviewWorkflow(),
   } = {}) {
     if (!(catalog instanceof FileBackedCatalog)) {
@@ -17,20 +19,33 @@ class OrchestratorExecutionLoop {
     this.catalog = catalog;
     this.router = router;
     this.retrievalRuntime = retrievalRuntime;
+    this.interventionRunner = interventionRunner;
     this.reviewWorkflow = reviewWorkflow;
   }
 
-  async run({ taskPacket, retrievalRequest, now = new Date() }) {
+  async run({ taskPacket, retrievalRequest, intervention, now = new Date() }) {
     const routingPlan = this.router.route(taskPacket);
     const catalogs = this.catalog.loadRuntimeCatalogs();
-    const retrieval = retrievalRequest
-      ? await this.retrievalRuntime.execute({ request: retrievalRequest, catalogs, now })
-      : null;
+    let retrieval = null;
+    let interventionResult = null;
+
+    if (retrievalRequest) {
+      retrieval = await this.retrievalRuntime.execute({ request: retrievalRequest, catalogs, now });
+    } else if (intervention) {
+      const interventionExecution = await this.interventionRunner.run({
+        intervention,
+        catalogs,
+        now,
+      });
+      retrieval = interventionExecution.retrieval;
+      interventionResult = interventionExecution.intervention;
+    }
 
     return {
       task_id: taskPacket.task_id,
       routing_plan: routingPlan,
       retrieval,
+      intervention: interventionResult,
       next_actions: buildNextActions({ routingPlan, retrieval }),
       catalog_counts: {
         evidence: catalogs.evidence.length,

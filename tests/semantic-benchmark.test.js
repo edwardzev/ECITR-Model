@@ -44,12 +44,22 @@ test("semantic benchmark compares heuristic and qdrant reports on the same scena
           intent: "analysis",
         },
       },
+      {
+        scenario_id: "bench_002",
+        request: {
+          request_id: "req_bench_002",
+          query: "ECITR_QDRANT_URL",
+          project_scope: "project_family",
+          intent: "analysis",
+        },
+      },
     ],
     catalogs,
     qdrantBackend: backend,
   });
 
-  assert.equal(report.scenario_count, 1);
+  assert.equal(report.scenario_count, 2);
   assert.equal(report.scenarios[0].scenario_id, "bench_001");
+  assert.equal(report.scenarios[1].scenario_id, "bench_002");
   assert.ok(report.scenarios[0].qdrant.runtime_results.tactics.includes("tac_metadata_prune_before_vector_rank_001"));
 });

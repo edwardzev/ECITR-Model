@@ -10,4 +10,6 @@ test("seedExampleCatalog writes a usable file-backed example catalog", () => {
   assert.equal(catalogs.evidence.length, 1);
   assert.equal(catalogs.review_audit_entries.length, 1);
   assert.equal(catalogs.atomic_claim_sets.length, 1);
+  assert.equal(catalogs.parameter_definitions.length, 1);
+  assert.equal(catalogs.parameter_observations.length, 1);
 });

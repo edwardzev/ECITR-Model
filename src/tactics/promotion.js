@@ -26,6 +26,7 @@ class TacticPromotionPipeline {
       source_case_refs: packet.source_case_refs,
       supporting_invariant_refs: packet.supporting_invariant_refs,
       evidence_refs: packet.evidence_refs,
+      parameter_observation_refs: packet.parameter_observation_refs,
       tool_binding: packet.tool_binding,
       tool_version_bounds: packet.tool_version_bounds,
       environment_bounds: packet.environment_bounds,

@@ -1,0 +1,34 @@
+{
+  "observation_id": "paramobs_ecitr_qdrant_url_ev_mem_20260410_001",
+  "definition_id": "paramdef_ecitr_qdrant_url",
+  "parameter_key": "ECITR_QDRANT_URL",
+  "raw_value_text": "http://127.0.0.1:6333",
+  "value_type": "string",
+  "value_json": "http://127.0.0.1:6333",
+  "observation_kind": "set",
+  "observed_at": "2026-04-10T09:00:00Z",
+  "project_scope": "global",
+  "source_evidence_refs": [
+    "ev_mem_20260410_001"
+  ],
+  "source_spans": [
+    {
+      "path": "config.qdrant.url",
+      "start_line": 1,
+      "end_line": 1,
+      "start_char": 0,
+      "end_char": 21,
+      "quote": "ECITR_QDRANT_URL=http://127.0.0.1:6333"
+    }
+  ],
+  "strategy_id": "parameter-distiller-file-v1",
+  "extracted_at": "2026-04-15T09:00:00Z",
+  "extracted_by": "parameter-distiller",
+  "confidence": 0.95,
+  "tool_binding": [
+    "qdrant-local"
+  ],
+  "environment_bounds": [
+    "local ECITR workspace"
+  ]
+}

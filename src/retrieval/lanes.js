@@ -2,6 +2,7 @@ const { RetrievalLane } = require("./lane-interface");
 const { assertSemanticRetrievalBackend } = require("./semantic-backend-interface");
 const { HeuristicSemanticBackend } = require("./semantic-backends/heuristic-backend");
 const { buildEvidenceRetrievalText } = require("./evidence-text");
+const { buildParameterIndexes, buildParameterSummaryForRecord } = require("../parameters/retrieval");
 
 class LexicalLane extends RetrievalLane {
   constructor({ catalogs }) {
@@ -10,6 +11,7 @@ class LexicalLane extends RetrievalLane {
       supportedLayers: ["tactics", "invariants", "cases", "evidence"],
     });
     this.catalogs = catalogs;
+    this.parameterIndexes = buildParameterIndexes(catalogs);
   }
 
   async execute({ request, plan }) {
@@ -23,6 +25,7 @@ class LexicalLane extends RetrievalLane {
         }
         const haystack = getSearchText(layer, record, {
           catalogRoot: this.catalogs?.__catalogRoot,
+          parameterIndexes: this.parameterIndexes,
         });
         const score = scoreTokenOverlap(queryTokens, tokenize(haystack));
         if (score <= 0) {
@@ -44,6 +47,7 @@ class MetadataLane extends RetrievalLane {
       supportedLayers: ["tactics", "invariants", "cases", "evidence"],
     });
     this.catalogs = catalogs;
+    this.parameterIndexes = buildParameterIndexes(catalogs);
   }
 
   async execute({ request, plan }) {
@@ -55,7 +59,7 @@ class MetadataLane extends RetrievalLane {
         if (!isRetrievableRecord(layer, record)) {
           continue;
         }
-        const metadata = getMetadataText(layer, record);
+        const metadata = getMetadataText(layer, record, this.parameterIndexes);
         const score = scoreTokenOverlap(queryTokens, tokenize(metadata));
         if (score <= 0) {
           continue;
@@ -201,27 +205,45 @@ function getRecordId(layer, record) {
   }
 }
 
-function getSearchText(layer, record, { catalogRoot } = {}) {
+function getSearchText(layer, record, { catalogRoot, parameterIndexes } = {}) {
   switch (layer) {
     case "tactics":
-      return [record.title, record.summary, record.action, ...(record.steps ?? [])].join(" ");
+      return [
+        record.title,
+        record.summary,
+        record.action,
+        ...(record.steps ?? []),
+        buildParameterSummaryForRecord(layer, record, parameterIndexes),
+      ].join(" ");
     case "invariants":
       return [record.title, record.summary, record.statement, ...(record.scope ?? [])].join(" ");
     case "cases":
-      return [record.problem_statement, record.action_taken, record.outcome, record.failure_mode].filter(Boolean).join(" ");
+      return [
+        record.problem_statement,
+        record.action_taken,
+        record.outcome,
+        record.failure_mode,
+        buildParameterSummaryForRecord(layer, record, parameterIndexes),
+      ].filter(Boolean).join(" ");
     case "evidence":
       return buildEvidenceRetrievalText(record, {
         catalogRoot,
+        parameterIndexes,
       });
     default:
       return "";
   }
 }
 
-function getMetadataText(layer, record) {
+function getMetadataText(layer, record, parameterIndexes) {
   switch (layer) {
     case "tactics":
-      return [record.series_key, ...(record.tool_binding ?? []), ...(record.environment_bounds ?? [])].join(" ");
+      return [
+        record.series_key,
+        ...(record.tool_binding ?? []),
+        ...(record.environment_bounds ?? []),
+        buildParameterSummaryForRecord(layer, record, parameterIndexes),
+      ].join(" ");
     case "invariants":
       return [record.series_key, ...(record.scope ?? []), ...(record.non_scope ?? [])].join(" ");
     case "cases":
@@ -229,9 +251,15 @@ function getMetadataText(layer, record) {
         record.context?.project_scope,
         ...(record.context?.toolchain ?? []),
         ...(record.context?.constraints ?? []),
+        buildParameterSummaryForRecord(layer, record, parameterIndexes),
       ].join(" ");
     case "evidence":
-      return [record.project_scope, record.actor_scope, record.source_type].join(" ");
+      return [
+        record.project_scope,
+        record.actor_scope,
+        record.source_type,
+        buildParameterSummaryForRecord(layer, record, parameterIndexes),
+      ].join(" ");
     default:
       return "";
   }

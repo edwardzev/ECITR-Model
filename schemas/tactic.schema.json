@@ -37,6 +37,10 @@
     "source_case_refs": { "type": "array", "items": { "type": "string", "pattern": "^case_[A-Za-z0-9_-]+$" } },
     "supporting_invariant_refs": { "type": "array", "items": { "type": "string", "pattern": "^inv_[A-Za-z0-9_-]+$" } },
     "evidence_refs": { "type": "array", "items": { "type": "string", "pattern": "^ev_[A-Za-z0-9_-]+$" } },
+    "parameter_observation_refs": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^paramobs_[A-Za-z0-9_-]+$" }
+    },
     "tool_binding": { "type": "array", "items": { "type": "string", "minLength": 1 } },
     "tool_version_bounds": { "type": "string", "minLength": 1 },
     "environment_bounds": { "type": "array", "items": { "type": "string", "minLength": 1 } },

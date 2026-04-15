@@ -1,0 +1,130 @@
+[
+  {
+    "scenario_id": "intervention_preflight_example_001",
+    "catalog_variant": "example",
+    "intervention": {
+      "mode": "preflight",
+      "query": "scope filter ranking project retrieval",
+      "project_scope": "project_family"
+    },
+    "expected": {
+      "retrieval_intent": "action",
+      "query": "scope filter ranking project retrieval",
+      "weak_hit": false,
+      "selected_results": {
+        "tactics": [
+          "tac_metadata_prune_before_vector_rank_001"
+        ],
+        "invariants": [
+          "inv_scope_filter_before_rank_001"
+        ],
+        "cases": [
+          "case_retrieval_scope_drift_001"
+        ],
+        "evidence": [
+          "ev_mem_20260410_001"
+        ]
+      },
+      "related_candidates": {
+        "tactics": [],
+        "invariants": [],
+        "cases": [],
+        "evidence": []
+      }
+    }
+  },
+  {
+    "scenario_id": "intervention_failure_retry_module_not_found_001",
+    "catalog_variant": "example",
+    "intervention": {
+      "mode": "failure_retry",
+      "query": "scope filter ranking project retrieval",
+      "project_scope": "project_family",
+      "failure_kind": "module_not_found",
+      "failure_text": "Cannot find module ../qdrant-backend.js"
+    },
+    "expected": {
+      "retrieval_intent": "verification",
+      "query": "scope filter ranking project retrieval module not found cannot find module ../qdrant-backend.js",
+      "weak_hit": false,
+      "selected_results": {
+        "tactics": [
+          "tac_metadata_prune_before_vector_rank_001"
+        ],
+        "invariants": [
+          "inv_scope_filter_before_rank_001"
+        ],
+        "cases": [
+          "case_retrieval_scope_drift_001"
+        ],
+        "evidence": [
+          "ev_mem_20260410_001"
+        ]
+      },
+      "related_candidates": {
+        "tactics": [],
+        "invariants": [],
+        "cases": [],
+        "evidence": []
+      }
+    }
+  },
+  {
+    "scenario_id": "intervention_weak_hit_graph_001",
+    "catalog_variant": "weak_hit_graph",
+    "intervention": {
+      "mode": "preflight",
+      "query": "github.com/example/memory-engine/issues/42",
+      "project_scope": "project"
+    },
+    "expected": {
+      "retrieval_intent": "action",
+      "query": "github.com/example/memory-engine/issues/42",
+      "weak_hit": true,
+      "selected_results": {
+        "tactics": [],
+        "invariants": [
+          "inv_scope_filter_before_rank_001"
+        ],
+        "cases": [],
+        "evidence": [
+          "ev_mem_20260410_001"
+        ]
+      },
+      "related_candidates": {
+        "tactics": [],
+        "cases": [],
+        "invariants": [],
+        "evidence": []
+      }
+    }
+  },
+  {
+    "scenario_id": "intervention_wrong_scope_case_001",
+    "catalog_variant": "wrong_scope_case_only",
+    "intervention": {
+      "mode": "failure_retry",
+      "query": "multiple projects shared similar tool names",
+      "project_scope": "project",
+      "failure_kind": "permission_issue",
+      "failure_text": "Permission denied while reading scoped case index"
+    },
+    "expected": {
+      "retrieval_intent": "verification",
+      "query": "multiple projects shared similar tool names permission issue permission denied while reading scoped case index",
+      "weak_hit": true,
+      "selected_results": {
+        "tactics": [],
+        "invariants": [],
+        "cases": [],
+        "evidence": []
+      },
+      "related_candidates": {
+        "tactics": [],
+        "invariants": [],
+        "cases": [],
+        "evidence": []
+      }
+    }
+  }
+]

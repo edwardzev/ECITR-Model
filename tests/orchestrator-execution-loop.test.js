@@ -8,6 +8,7 @@ const { CaseCompiler } = require("../src/cases/case-compiler");
 const { readJson } = require("../src/validation/validator");
 const { REPO_ROOT } = require("../src/validation/schema-registry");
 const { OrchestratorExecutionLoop } = require("../src/orchestrator/execution-loop");
+const { RuntimeInterventionRunner } = require("../src/runtime/intervention-runner");
 const { FileBackedCatalog } = require("../src/storage/file-backed-catalog");
 const { loadExample } = require("./helpers/load-example");
 
@@ -51,9 +52,90 @@ test("workflow baseline scenarios remain stable", async () => {
 
     assert.equal(result.routing_plan.primary_role, scenario.expected.primary_role);
     assert.equal(result.routing_plan.requires_governance_review, scenario.expected.requires_governance_review);
-    assert.equal(result.routing_plan.requires_research, scenario.expected.requires_research);
-    assert.equal(result.retrieval.response.results.tactics[0], scenario.expected.top_tactic);
+  assert.equal(result.routing_plan.requires_research, scenario.expected.requires_research);
+  assert.equal(result.retrieval.response.results.tactics[0], scenario.expected.top_tactic);
   }
+});
+
+test("orchestrator execution loop can synthesize runtime intervention retrieval", async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-loop-intervention-"));
+  const catalog = new FileBackedCatalog({ rootDir });
+
+  for (const recordType of [
+    "evidence",
+    "case",
+    "invariant",
+    "tactic",
+    "atomic_claim_set",
+    "parameter_definition",
+    "parameter_observation",
+  ]) {
+    catalog.writeRecord(recordType, loadExample(recordType));
+  }
+
+  const loop = new OrchestratorExecutionLoop({
+    catalog,
+    interventionRunner: new RuntimeInterventionRunner({
+      graphRoot: path.join(rootDir, ".local", "support-graph"),
+      artifactRoot: path.join(rootDir, ".local", "runtime-interventions"),
+    }),
+  });
+  const result = await loop.run({
+    taskPacket: loadExample("orchestrator_task_packet"),
+    intervention: {
+      mode: "preflight",
+      query: "scope filter ranking project retrieval",
+      project_scope: "project_family",
+    },
+    now: new Date("2026-05-01T00:00:00Z"),
+  });
+
+  assert.equal(result.retrieval.plan.intent, "action");
+  assert.equal(result.intervention.mode, "preflight");
+  assert.equal(result.intervention.selected_results.tactics[0], "tac_metadata_prune_before_vector_rank_001");
+  assert.match(result.intervention.artifact_path, /\.local\/runtime-interventions\/2026\/05\//);
+});
+
+test("explicit retrievalRequest bypasses intervention synthesis", async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-loop-retrieval-"));
+  const catalog = new FileBackedCatalog({ rootDir });
+
+  for (const recordType of [
+    "evidence",
+    "case",
+    "invariant",
+    "tactic",
+    "atomic_claim_set",
+    "parameter_definition",
+    "parameter_observation",
+  ]) {
+    catalog.writeRecord(recordType, loadExample(recordType));
+  }
+
+  let interventionCalls = 0;
+  const loop = new OrchestratorExecutionLoop({
+    catalog,
+    interventionRunner: {
+      async run() {
+        interventionCalls += 1;
+        throw new Error("intervention runner should not be called when retrievalRequest is provided");
+      },
+    },
+  });
+  const result = await loop.run({
+    taskPacket: loadExample("orchestrator_task_packet"),
+    retrievalRequest: loadExample("retrieval_request"),
+    intervention: {
+      mode: "preflight",
+      query: "ignored",
+      project_scope: "project_family",
+    },
+    now: new Date("2026-05-01T00:00:00Z"),
+  });
+
+  assert.equal(interventionCalls, 0);
+  assert.equal(result.intervention, null);
+  assert.equal(result.retrieval.response.results.tactics[0], "tac_metadata_prune_before_vector_rank_001");
 });
 
 test("persisted review writes both the updated record and an audit entry", () => {

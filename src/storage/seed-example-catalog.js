@@ -12,6 +12,8 @@ const EXAMPLE_RECORD_TYPES = Object.freeze([
   "invariant",
   "tactic",
   "atomic_claim_set",
+  "parameter_definition",
+  "parameter_observation",
   "review_audit_entry",
 ]);
 

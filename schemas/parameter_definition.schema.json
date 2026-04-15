@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "definition_id",
+    "observed_key",
+    "normalized_key",
+    "value_type",
+    "created_at",
+    "first_observed_at",
+    "first_source_evidence_ref"
+  ],
+  "properties": {
+    "definition_id": { "type": "string", "pattern": "^paramdef_[A-Za-z0-9_-]+$" },
+    "observed_key": { "type": "string", "minLength": 1 },
+    "normalized_key": { "type": "string", "minLength": 1 },
+    "value_type": {
+      "type": "string",
+      "enum": ["string", "number", "boolean", "null", "object", "array", "unknown"]
+    },
+    "units": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "first_observed_at": { "type": "string", "format": "date-time" },
+    "first_source_evidence_ref": { "type": "string", "pattern": "^ev_[A-Za-z0-9_-]+$" }
+  }
+}

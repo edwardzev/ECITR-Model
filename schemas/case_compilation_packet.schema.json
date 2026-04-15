@@ -17,6 +17,10 @@
       "minItems": 1,
       "items": { "type": "string", "pattern": "^ev_[A-Za-z0-9_-]+$" }
     },
+    "parameter_observation_refs": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^paramobs_[A-Za-z0-9_-]+$" }
+    },
     "problem_statement": { "type": "string", "minLength": 1 },
     "context": {
       "type": "object",

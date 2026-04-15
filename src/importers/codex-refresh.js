@@ -20,6 +20,7 @@ async function refreshCodexIndex({
   includeSessions = true,
   includeArchived = true,
   recreateCollection = false,
+  skipQdrantSync = false,
   embedderType = process.env.ECITR_EMBEDDER ?? "openai",
   embeddingModel = process.env.ECITR_EMBEDDING_MODEL,
   denseVectorSize,
@@ -79,20 +80,28 @@ async function refreshCodexIndex({
     validator,
   });
   summary.catalog_counts = countCatalogRecords(catalogs);
-  summary.qdrant_sync = await syncCatalog({
-    catalogs,
-    qdrantUrl,
-    collectionName,
-    embedderType,
-    embeddingModel,
-    denseVectorSize,
-    sparseBucketCount,
-    openAIApiKey,
-    openAIBaseUrl,
-    openAIOrganization,
-    openAIProject,
-    recreateCollection,
-  });
+  if (skipQdrantSync) {
+    summary.qdrant_sync = {
+      status: "skipped",
+      endpoint: qdrantUrl,
+      collection_name: collectionName,
+    };
+  } else {
+    summary.qdrant_sync = await syncCatalog({
+      catalogs,
+      qdrantUrl,
+      collectionName,
+      embedderType,
+      embeddingModel,
+      denseVectorSize,
+      sparseBucketCount,
+      openAIApiKey,
+      openAIBaseUrl,
+      openAIOrganization,
+      openAIProject,
+      recreateCollection,
+    });
+  }
 
   if (skipStructuralCheck) {
     summary.structural_checks = { status: "skipped" };

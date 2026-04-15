@@ -10,6 +10,8 @@ Define the whole ECITR system in one place without collapsing layer boundaries.
 
 Stores immutable source material and provenance.
 
+Includes evidence-adjacent support records such as atomic claim sets and parameter memory support records when ECITR needs source-backed retrieval aids without promoting them into a new authority layer.
+
 May use:
 - MemPalace
 - blob stores
@@ -41,6 +43,18 @@ Stores current, bounded action guidance for concrete tool/version/environment co
 ### 5. Retrieval
 
 Classifies queries, retrieves candidates from each layer, ranks them, applies budgets and invalidation rules, and returns a fused result.
+
+### 6. Support Graph
+
+Builds a derived navigation and audit overlay from canonical and support records.
+
+It improves:
+- cross-record traversal
+- related-item discovery
+- path explanation
+- change auditing
+
+It does not define truth.
 
 ## Authority Chain
 
@@ -89,6 +103,8 @@ See:
 - `docs/architecture/storage-catalog.md`
 - `docs/architecture/case-compiler-pipeline.md`
 - `docs/architecture/atomic-claims-extraction.md`
+- `docs/architecture/parameter-memory.md`
+- `docs/architecture/support-graph.md`
 - `docs/architecture/review-workflow.md`
 - `docs/architecture/semantic-backend-interface.md`
 - `docs/architecture/retrieval-planner.md`

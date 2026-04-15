@@ -1,5 +1,6 @@
 const { SemanticRetrievalBackend } = require("../semantic-backend-interface");
 const { buildEvidenceRetrievalText } = require("../evidence-text");
+const { buildParameterIndexes, buildParameterSummaryForRecord } = require("../../parameters/retrieval");
 
 class HeuristicSemanticBackend extends SemanticRetrievalBackend {
   constructor({ catalogs }) {
@@ -10,6 +11,7 @@ class HeuristicSemanticBackend extends SemanticRetrievalBackend {
 
     this.catalogs = catalogs;
     this.atomicClaimsByEvidence = buildAtomicClaimIndex(catalogs.atomic_claim_sets ?? []);
+    this.parameterIndexes = buildParameterIndexes(catalogs);
   }
 
   async retrieve({ request, plan }) {
@@ -21,7 +23,7 @@ class HeuristicSemanticBackend extends SemanticRetrievalBackend {
         if (!isRetrievableRecord(layer, record)) {
           continue;
         }
-        const haystack = getSemanticText(layer, record, this.atomicClaimsByEvidence, {
+        const haystack = getSemanticText(layer, record, this.atomicClaimsByEvidence, this.parameterIndexes, {
           catalogRoot: this.catalogs?.__catalogRoot,
         });
         const score = scoreSoftOverlap(queryTokens, semanticTokens(haystack));
@@ -68,7 +70,7 @@ function getRecordId(layer, record) {
   }
 }
 
-function getSemanticText(layer, record, atomicClaimsByEvidence, { catalogRoot } = {}) {
+function getSemanticText(layer, record, atomicClaimsByEvidence, parameterIndexes, { catalogRoot } = {}) {
   switch (layer) {
     case "tactics":
       return [
@@ -78,6 +80,7 @@ function getSemanticText(layer, record, atomicClaimsByEvidence, { catalogRoot } 
         ...(record.prerequisites ?? []),
         ...(record.steps ?? []),
         ...(record.fallbacks ?? []),
+        buildParameterSummaryForRecord(layer, record, parameterIndexes),
       ].join(" ");
     case "invariants":
       return [
@@ -95,11 +98,13 @@ function getSemanticText(layer, record, atomicClaimsByEvidence, { catalogRoot } 
         record.failure_mode,
         ...(record.applicability?.when_to_apply ?? []),
         ...(record.applicability?.when_not_to_apply ?? []),
+        buildParameterSummaryForRecord(layer, record, parameterIndexes),
       ].filter(Boolean).join(" ");
     case "evidence":
       return buildEvidenceRetrievalText(record, {
         catalogRoot,
         atomicClaims: atomicClaimsByEvidence.get(record.evidence_id) ?? [],
+        parameterIndexes,
       });
     default:
       return "";

@@ -31,6 +31,7 @@ class CaseCompiler {
     assignIfPresent(draftCase, "failure_mode", packet.failure_mode);
     assignIfPresent(draftCase, "applicability", packet.applicability);
     assignIfPresent(draftCase, "open_questions", packet.open_questions);
+    assignIfPresent(draftCase, "parameter_observation_refs", packet.parameter_observation_refs);
 
     if (packet.derived_from_case_id) {
       draftCase.derived_from_case_id = packet.derived_from_case_id;

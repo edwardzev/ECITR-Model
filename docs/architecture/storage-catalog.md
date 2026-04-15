@@ -48,6 +48,8 @@ The file-backed catalog uses one directory per persisted record type:
 - `invariants/`
 - `tactics/`
 - `atomic-claim-sets/`
+- `parameter-definitions/`
+- `parameter-observations/`
 - `review-audit-entries/`
 
 Each file name is the canonical record identifier plus `.json`.
@@ -67,6 +69,10 @@ Loose staging artifacts remain outside the canonical directories. The current au
 - `staging/invariant-promotion-packets/`
 - `staging/tactic-promotion-packets/`
 
+Derived support-graph artifacts also remain outside the canonical directories under:
+
+- `.local/support-graph/`
+
 ## Persistence Rules
 
 - schemas must validate before persistence
@@ -83,11 +89,19 @@ The runtime retrieval catalog exposes:
 - `cases`
 - `evidence`
 - `atomic_claim_sets`
+- `parameter_definitions`
+- `parameter_observations`
 - `review_audit_entries`
 
 `atomic_claim_sets` are support records. They inform retrieval, but they are not returned as a top-level retrieval result layer.
 
+`parameter_definitions` and `parameter_observations` are support records. They enrich retrieval text and support explicit linkage from evidence into cases and tactics, but they are not returned as a top-level retrieval result layer.
+
 `review_audit_entries` are support records. They preserve governance evidence, not retrievable semantic truth.
+
+See:
+- `docs/architecture/parameter-memory.md`
+- `docs/architecture/support-graph.md`
 
 ## Future Replacement Rule
 

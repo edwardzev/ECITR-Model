@@ -74,6 +74,24 @@ const SCHEMA_REGISTRY = Object.freeze({
       "atomic-claim-set.example.json",
     ),
   },
+  parameter_definition: {
+    schemaPath: path.join(REPO_ROOT, "schemas", "parameter_definition.schema.json"),
+    fixturePath: path.join(
+      REPO_ROOT,
+      "fixtures",
+      "examples",
+      "parameter-definition.record.example.json",
+    ),
+  },
+  parameter_observation: {
+    schemaPath: path.join(REPO_ROOT, "schemas", "parameter_observation.schema.json"),
+    fixturePath: path.join(
+      REPO_ROOT,
+      "fixtures",
+      "examples",
+      "parameter-observation.record.example.json",
+    ),
+  },
   invariant_promotion_packet: {
     schemaPath: path.join(REPO_ROOT, "schemas", "invariant_promotion_packet.schema.json"),
     fixturePath: path.join(

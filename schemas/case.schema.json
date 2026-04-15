@@ -43,6 +43,10 @@
       "minItems": 1,
       "items": { "type": "string", "pattern": "^ev_[A-Za-z0-9_-]+$" }
     },
+    "parameter_observation_refs": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^paramobs_[A-Za-z0-9_-]+$" }
+    },
     "derived_from_case_id": { "type": "string", "pattern": "^case_[A-Za-z0-9_-]+$" },
     "supersedes_case_id": { "type": "string", "pattern": "^case_[A-Za-z0-9_-]+$" },
     "authoring_agent": { "type": "string", "minLength": 1 },

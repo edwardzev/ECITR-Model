@@ -32,5 +32,22 @@
         "evidence": ["ev_mem_20260410_001"]
       }
     }
+  },
+  {
+    "scenario_id": "analysis-parameter-example-catalog",
+    "request": {
+      "request_id": "req_runtime_baseline_003",
+      "query": "ECITR_QDRANT_URL",
+      "project_scope": "project_family",
+      "intent": "analysis"
+    },
+    "expected": {
+      "results": {
+        "tactics": ["tac_metadata_prune_before_vector_rank_001"],
+        "invariants": [],
+        "cases": ["case_retrieval_scope_drift_001"],
+        "evidence": ["ev_mem_20260410_001"]
+      }
+    }
   }
 ]

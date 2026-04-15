@@ -1,4 +1,4 @@
-const { evaluateTacticFreshness } = require("../tactics/freshness");
+const { evaluateRetrievalEligibility } = require("./eligibility");
 
 function fuseCandidates({ request, plan, laneCandidates, now = new Date() }) {
   const grouped = new Map();
@@ -32,7 +32,7 @@ function fuseCandidates({ request, plan, laneCandidates, now = new Date() }) {
   };
 
   for (const aggregated of grouped.values()) {
-    const conflictMessages = detectConflicts({ request, plan, aggregated, now });
+    const conflictMessages = collectCandidateMessages({ request, plan, aggregated, now });
     if (conflictMessages.exclude) {
       conflicts.push(...conflictMessages.messages);
       continue;
@@ -66,55 +66,19 @@ function fuseCandidates({ request, plan, laneCandidates, now = new Date() }) {
   };
 }
 
-function detectConflicts({ request, plan, aggregated, now }) {
+function collectCandidateMessages({ request, plan, aggregated, now }) {
   const messages = [];
 
-  if (aggregated.layer !== "evidence" && aggregated.record.status !== "active") {
-    messages.push(`excluded ${aggregated.layer.slice(0, -1)} ${aggregated.recordId}: status ${aggregated.record.status} is not retrievable`);
+  const eligibility = evaluateRetrievalEligibility({
+    layer: aggregated.layer,
+    record: aggregated.record,
+    request,
+    plan,
+    now,
+  });
+  if (eligibility.exclude) {
+    messages.push(eligibility.message);
     return { exclude: true, messages };
-  }
-
-  if (
-    aggregated.layer === "cases" &&
-    aggregated.record.status === "active" &&
-    aggregated.record.review_state !== "approved"
-  ) {
-    messages.push(`excluded case ${aggregated.recordId}: active case must be approved for retrieval`);
-    return { exclude: true, messages };
-  }
-
-  if (aggregated.layer === "tactics") {
-    const freshness = evaluateTacticFreshness(aggregated.record, { now });
-    if (!freshness.usable) {
-      messages.push(`excluded tactic ${aggregated.recordId}: ${freshness.reasons.join("; ")}`);
-      return { exclude: true, messages };
-    }
-  }
-
-  if (aggregated.layer === "cases") {
-    const scope = aggregated.record.context?.project_scope;
-    if (
-      scope &&
-      scope !== "global" &&
-      request.project_scope !== "global" &&
-      scope !== request.project_scope
-    ) {
-      messages.push(`excluded case ${aggregated.recordId}: scope ${scope} conflicts with request ${request.project_scope}`);
-      return { exclude: true, messages };
-    }
-  }
-
-  if (aggregated.layer === "evidence") {
-    const scope = aggregated.record.project_scope;
-    if (
-      scope &&
-      scope !== "global" &&
-      request.project_scope !== "global" &&
-      scope !== request.project_scope
-    ) {
-      messages.push(`excluded evidence ${aggregated.recordId}: scope ${scope} conflicts with request ${request.project_scope}`);
-      return { exclude: true, messages };
-    }
   }
 
   if (aggregated.laneIds.length > 1) {

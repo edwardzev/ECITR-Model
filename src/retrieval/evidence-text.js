@@ -1,11 +1,13 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
+const { buildParameterSummaryForRecord } = require("../parameters/retrieval");
+
 const MAX_SEGMENTS = 128;
 const MAX_TEXT_LENGTH = 16000;
 const payloadCache = new Map();
 
-function buildEvidenceRetrievalText(record, { catalogRoot, atomicClaims = [] } = {}) {
+function buildEvidenceRetrievalText(record, { catalogRoot, atomicClaims = [], parameterIndexes = null } = {}) {
   const segments = [
     `Evidence id: ${record.evidence_id}.`,
     `Source locator: ${record.source_locator}.`,
@@ -33,6 +35,11 @@ function buildEvidenceRetrievalText(record, { catalogRoot, atomicClaims = [] } =
 
   if (Array.isArray(atomicClaims) && atomicClaims.length > 0) {
     segments.push(`Claims: ${atomicClaims.join(" ")}.`);
+  }
+
+  const parameterSummary = buildParameterSummaryForRecord("evidence", record, parameterIndexes);
+  if (parameterSummary) {
+    segments.push(parameterSummary);
   }
 
   return compactSegments(segments);

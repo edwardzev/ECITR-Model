@@ -7,6 +7,7 @@ const { CasePacketStore } = require("./staging-packet-store");
 const { FileBackedCatalog } = require("../storage/file-backed-catalog");
 const { EcitrValidator } = require("../validation/validator");
 const { REPO_ROOT } = require("../validation/schema-registry");
+const { buildParameterIndexes, getObservationsForRecord } = require("../parameters/retrieval");
 
 const DEFAULT_CATALOG_ROOT = path.join(REPO_ROOT, ".local", "catalog");
 const DEFAULT_DERIVATION_RULE_ID = "case-autodistill-run-v1";
@@ -35,6 +36,7 @@ function refreshCases({
     skipped_unsupported: 0,
     errors: 0,
   };
+  const parameterIndexes = buildParameterIndexes(catalog.loadRuntimeCatalogs());
 
   for (const evidenceRecord of catalog.listRecords("evidence")) {
     summary.scanned_evidence += 1;
@@ -45,6 +47,7 @@ function refreshCases({
         catalogRoot,
         derivationRuleId,
         authoringAgent,
+        parameterIndexes,
       });
     } catch (error) {
       summary.errors += 1;
@@ -91,7 +94,15 @@ function refreshCases({
   return summary;
 }
 
-function buildCompilationPacketFromEvidence(evidenceRecord, { catalogRoot, derivationRuleId, authoringAgent }) {
+function buildCompilationPacketFromEvidence(
+  evidenceRecord,
+  {
+    catalogRoot,
+    derivationRuleId,
+    authoringAgent,
+    parameterIndexes = buildParameterIndexes({}),
+  },
+) {
   const payload = loadEvidencePayload(evidenceRecord, { catalogRoot });
   if (!isStructuredRunPayload(payload)) {
     return null;
@@ -122,6 +133,11 @@ function buildCompilationPacketFromEvidence(evidenceRecord, { catalogRoot, deriv
     authoring_agent: authoringAgent,
     open_questions: openQuestions,
   };
+  const parameterObservationRefs = getObservationsForRecord("evidence", evidenceRecord, parameterIndexes)
+    .map((observation) => observation.observation_id);
+  if (parameterObservationRefs.length > 0) {
+    packet.parameter_observation_refs = parameterObservationRefs;
+  }
 
   if (blockers.length > 0) {
     packet.failure_mode = formatList(blockers);
