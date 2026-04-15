@@ -1,0 +1,29 @@
+[
+  {
+    "scenario_id": "semantic_compare_analysis_001",
+    "request": {
+      "request_id": "req_semantic_compare_001",
+      "query": "scope filter ranking project retrieval",
+      "project_scope": "project_family",
+      "intent": "analysis"
+    }
+  },
+  {
+    "scenario_id": "semantic_compare_audit_001",
+    "request": {
+      "request_id": "req_semantic_compare_002",
+      "query": "supporting evidence for scope filter ranking",
+      "project_scope": "project_family",
+      "intent": "audit"
+    }
+  },
+  {
+    "scenario_id": "semantic_compare_runtime_001",
+    "request": {
+      "request_id": "req_semantic_compare_003",
+      "query": "How should ECITR prevent unrelated project records from influencing ranking and fusion?",
+      "project_scope": "project_family",
+      "intent": "analysis"
+    }
+  }
+]

@@ -1,0 +1,117 @@
+{
+  "derivation_id": "ihm_20260414T000000000Z_001",
+  "benchmark_id": "invariant_hypothesis_derivation_example_v1",
+  "description": "Example deterministic invariant hypothesis derivation manifest over uncovered active cases.",
+  "generated_at": "2026-04-14T00:00:00.000Z",
+  "catalog_root": "/tmp/ecitr-catalog",
+  "source_pool": "uncovered_active_cases",
+  "derivation_method": "deterministic_pairwise_rare_token_overlap_v1",
+  "thresholds": {
+    "include_covered_cases": false,
+    "max_candidates": 25,
+    "max_candidates_per_case": 4,
+    "max_rare_token_document_frequency": 6,
+    "min_shared_clauses": 1,
+    "min_shared_rare_tokens": 4,
+    "min_rare_token_score": 3
+  },
+  "total_active_cases": 87,
+  "total_source_cases": 81,
+  "total_existing_active_invariants": 3,
+  "total_seed_pairs": 12,
+  "total_selected_candidates": 1,
+  "approved_candidate_labels": [
+    "derived_approve_memory_persisted_artifacts"
+  ],
+  "blocked_candidate_labels": [],
+  "entries": [
+    {
+      "label": "derived_approve_memory_persisted_artifacts",
+      "expected_decision": "approve",
+      "promotion_basis": "multi_case",
+      "series_key": "derived.memory-persisted-artifacts-2cc1b4da",
+      "title": "Derived candidate: project morning review from persisted artifacts and canonical draft refs",
+      "summary": "Deterministically derived from active cases that repeat the same normalized clauses: \"Project morning review from persisted artifacts and canonical draft refs\"; \"Do not let scratch queues displace canonical artifacts\".",
+      "statement": "The cited active cases repeat the same decisive boundaries: \"Project morning review from persisted artifacts and canonical draft refs\"; \"Do not let scratch queues displace canonical artifacts\". Human review must confirm whether those repeated boundaries should be restated as one canonical invariant without adding facts absent from the source cases.",
+      "source_case_refs": [
+        "case_2cc1b4da4570da579115",
+        "case_c17f193c1558095faab4"
+      ],
+      "evidence_refs": [
+        "ev_aops_run_run_20260403180116_mcp",
+        "ev_aops_run_run_20260404165542_mcp"
+      ],
+      "why_it_is_stable": "Both source cases repeat the same normalized clauses across their problem, failure, or applicability framing: \"Project morning review from persisted artifacts and canonical draft refs\"; \"Do not let scratch queues displace canonical artifacts\".",
+      "scope": [
+        "memory",
+        "persisted",
+        "artifacts",
+        "canonical"
+      ],
+      "non_scope": [
+        "Cases that do not repeat the same normalized clauses across their decisive boundaries."
+      ],
+      "applicability_conditions": [
+        "Benchmark this candidate only against the cited active cases.",
+        "Promote only if a human can restate the repeated clauses as one durable rule."
+      ],
+      "non_applicability_conditions": [
+        "Do not promote when the repeated clauses are boilerplate workflow scaffolding rather than one durable rule."
+      ],
+      "known_breakers": [
+        "The repeated clauses are semantically incidental rather than one stable rule.",
+        "A broader active-case set splits the candidate into multiple narrower invariants."
+      ],
+      "tool_agnosticity_level": "medium",
+      "confidence": 0.68,
+      "derivation_metadata": {
+        "candidate_id": "ihc_2cc1b4da_c17f193c",
+        "source_case_titles": [
+          "Implement the lean memory runtime with overnight maintainer: remove compliance/recovery/promotion paths, simplify sessions and MCP surface, add overnight lesson maintainer and policy drafts, and update tests/docs.",
+          "Implement two agent-ops improvements: a morning review surface and a structured consolidation report."
+        ],
+        "source_evidence_refs": [
+          "ev_aops_run_run_20260403180116_mcp",
+          "ev_aops_run_run_20260404165542_mcp"
+        ],
+        "shared_clauses": [
+          "Project morning review from persisted artifacts and canonical draft refs",
+          "Do not let scratch queues displace canonical artifacts"
+        ],
+        "shared_clause_count": 2,
+        "shared_rare_tokens": [
+          "memory",
+          "persisted",
+          "artifacts",
+          "canonical"
+        ],
+        "shared_rare_token_count": 4,
+        "rare_token_score": 3.5,
+        "actual_decision": "approve",
+        "reasons": [],
+        "support_summary": [
+          {
+            "case_id": "case_2cc1b4da4570da579115",
+            "overlap_count": 6,
+            "overlap_tokens": [
+              "memory",
+              "persisted",
+              "artifacts",
+              "canonical"
+            ]
+          },
+          {
+            "case_id": "case_c17f193c1558095faab4",
+            "overlap_count": 8,
+            "overlap_tokens": [
+              "memory",
+              "persisted",
+              "artifacts",
+              "canonical"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

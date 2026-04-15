@@ -1,0 +1,10 @@
+{
+  "extraction_id": "extract_scope_retrieval_evidence_001",
+  "evidence_id": "ev_mem_20260410_001",
+  "source_text_path": "fixtures/source-material/evidence.ev_mem_20260410_001.txt",
+  "extracted_by": "case-steward",
+  "strategy_id": "atomic-claims-v1",
+  "max_claims": 6,
+  "proposed_claim_set_id": "claimset_scope_retrieval_evidence_001",
+  "extracted_at": "2026-04-10T09:15:00Z"
+}

@@ -1,0 +1,92 @@
+{
+  "benchmark_id": "invariant_discovery_benchmark_example_v1",
+  "description": "Example benchmark for invariant discovery over active supporting cases.",
+  "entries": [
+    {
+      "label": "approve_multi_case_scope_boundary",
+      "expected_decision": "approve",
+      "promotion_basis": "multi_case",
+      "series_key": "retrieval.scope-filter-before-rank",
+      "title": "Scope boundaries must be enforced before ranking",
+      "summary": "Authority boundaries should prune candidates before ranking or fusion.",
+      "statement": "When records carry scope or authority boundaries, those boundaries must be enforced before ranking or fusion so unauthorized candidates cannot influence the result set.",
+      "source_case_refs": [
+        "case_retrieval_scope_drift_001",
+        "case_retrieval_scope_drift_002"
+      ],
+      "why_it_is_stable": "The need to enforce authority boundaries survives backend changes because it is rooted in governance rather than any single retrieval implementation.",
+      "scope": [
+        "retrieval planning",
+        "authority preservation"
+      ],
+      "non_scope": [
+        "intentionally global search"
+      ],
+      "applicability_conditions": [
+        "Multiple scopes can appear in one candidate pool",
+        "The system supports pre-ranking filters"
+      ],
+      "non_applicability_conditions": [
+        "The caller explicitly asked for unbounded global search"
+      ],
+      "known_breakers": [
+        "Missing scope metadata"
+      ],
+      "tool_agnosticity_level": "high",
+      "confidence": 0.86
+    },
+    {
+      "label": "block_mismatched_cases",
+      "expected_decision": "block",
+      "promotion_basis": "multi_case",
+      "series_key": "mismatched.invariant.example",
+      "title": "Variant truth should be explicit before ranking",
+      "summary": "Mismatched cases should not become one invariant.",
+      "statement": "Variant truth and retrieval scope should both be enforced before ranking because they are explicit authority boundaries.",
+      "source_case_refs": [
+        "case_retrieval_scope_drift_001",
+        "case_variant_inventory_truth_001"
+      ],
+      "why_it_is_stable": "Both cases talk about preserving explicit truth.",
+      "scope": [
+        "mixed"
+      ],
+      "non_scope": [],
+      "applicability_conditions": [
+        "The system has explicit boundaries"
+      ],
+      "non_applicability_conditions": [],
+      "known_breakers": [
+        "No shared support"
+      ],
+      "tool_agnosticity_level": "high",
+      "confidence": 0.55
+    },
+    {
+      "label": "block_single_case_multi_case",
+      "expected_decision": "block",
+      "promotion_basis": "multi_case",
+      "series_key": "single.case.should.block",
+      "title": "One case is not enough for multi-case promotion",
+      "summary": "The discovery surface must reject multi-case promotion with only one source case.",
+      "statement": "A single source case cannot satisfy a multi-case invariant promotion basis.",
+      "source_case_refs": [
+        "case_retrieval_scope_drift_001"
+      ],
+      "why_it_is_stable": "The invariant contract requires multiple supporting cases for multi-case promotion.",
+      "scope": [
+        "promotion governance"
+      ],
+      "non_scope": [],
+      "applicability_conditions": [
+        "Promotion basis is multi_case"
+      ],
+      "non_applicability_conditions": [],
+      "known_breakers": [
+        "Only one case supplied"
+      ],
+      "tool_agnosticity_level": "high",
+      "confidence": 0.9
+    }
+  ]
+}

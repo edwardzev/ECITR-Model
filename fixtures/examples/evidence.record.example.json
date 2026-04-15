@@ -1,0 +1,14 @@
+{
+  "evidence_id": "ev_mem_20260410_001",
+  "substrate_ref": "mempalace://collection/ecitr-evidence/doc/2026-04-10-001",
+  "source_type": "web",
+  "source_locator": "https://github.com/example/memory-engine/issues/42",
+  "captured_at": "2026-04-10T09:00:00Z",
+  "project_scope": "global",
+  "actor_scope": "mixed",
+  "verbatim_payload_ref": "blob://evidence/2026/04/ev_mem_20260410_001.txt",
+  "payload_hash": "sha256:payload-example-001",
+  "source_hash": "sha256:source-example-001",
+  "redaction_state": "none",
+  "immutable": true
+}

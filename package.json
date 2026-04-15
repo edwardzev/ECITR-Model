@@ -1,0 +1,41 @@
+{
+  "name": "ecitr-model",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Evidence-Cases-Invariants-Tactics-Retrieval architecture project",
+  "license": "UNLICENSED",
+  "scripts": {
+    "validate:fixtures": "node src/validation/validate-fixtures.js",
+    "test": "node --test",
+    "check": "npm run validate:fixtures && npm test",
+    "import:agent-ops": "node src/cli/import-agent-ops.js",
+    "import:codex": "node src/cli/import-codex.js",
+    "capture:conversation": "node src/cli/capture-conversation-snapshot.js",
+    "refresh:agent-ops": "node src/cli/refresh-agent-ops.js",
+    "refresh:codex": "node src/cli/refresh-codex.js",
+    "refresh:cases": "node src/cli/refresh-cases.js",
+    "refresh:promotions": "node src/cli/refresh-promotions.js",
+    "refresh:autonomous": "node src/cli/refresh-autonomous.js",
+    "review:cases": "node src/cli/review-cases.js",
+    "review:invariants": "node src/cli/review-invariants.js",
+    "batch:cases": "node src/cli/review-cases.js batch",
+    "benchmark:cases": "node src/cli/benchmark-cases.js",
+    "benchmark:cases:replay": "node src/cli/benchmark-cases-replay.js",
+    "benchmark:invariants": "node src/cli/benchmark-invariants.js",
+    "derive:invariants": "node src/cli/derive-invariants.js",
+    "benchmark:tactics": "node src/cli/benchmark-tactics.js",
+    "review:tactics": "node src/cli/review-tactics.js",
+    "refresh:codex:launchd": "node src/cli/codex-refresh-launchd.js",
+    "qdrant:local": "node src/cli/qdrant-local.js",
+    "qdrant:install": "node src/cli/qdrant-local.js install",
+    "qdrant:start": "node src/cli/qdrant-local.js start",
+    "qdrant:stop": "node src/cli/qdrant-local.js stop",
+    "qdrant:status": "node src/cli/qdrant-local.js status",
+    "qdrant:sync": "node src/cli/sync-qdrant.js",
+    "benchmark:semantic": "node src/cli/benchmark-semantic.js"
+  },
+  "dependencies": {
+    "ajv": "^8.18.0",
+    "ajv-formats": "^3.0.1"
+  }
+}

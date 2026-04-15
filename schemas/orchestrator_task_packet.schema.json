@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_id",
+    "title",
+    "objective",
+    "affected_layers",
+    "change_class"
+  ],
+  "properties": {
+    "task_id": { "type": "string", "pattern": "^task_[A-Za-z0-9_-]+$" },
+    "title": { "type": "string", "minLength": 1 },
+    "objective": { "type": "string", "minLength": 1 },
+    "affected_layers": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "enum": ["evidence", "cases", "invariants", "tactics", "retrieval", "docs", "governance"] }
+    },
+    "change_class": {
+      "type": "string",
+      "enum": ["local", "cross-layer", "contract", "retrieval", "migration", "external-adaptation"]
+    },
+    "requires_research": { "type": "boolean" },
+    "requires_human_review": { "type": "boolean" },
+    "deliverables": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  }
+}

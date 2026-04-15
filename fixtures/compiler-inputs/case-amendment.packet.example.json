@@ -1,0 +1,19 @@
+{
+  "amendment_id": "cam_case_scope_memory_001",
+  "case_id": "case_scope_memory_001",
+  "base_case_version": 1,
+  "reviewer": "case-steward",
+  "rationale": "Applicability was supplied during manual review and unresolved questions were closed.",
+  "amended_at": "2026-04-11T16:45:00.000Z",
+  "changes": {
+    "applicability": {
+      "when_to_apply": [
+        "When the same workspace-level memory enforcement gap appears in Codex Desktop."
+      ],
+      "when_not_to_apply": [
+        "When the runtime already provides a guaranteed pre-reply memory hook."
+      ]
+    },
+    "open_questions": []
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "case_id": "case_retrieval_scope_drift_001",
+  "case_version": 1,
+  "status": "active",
+  "problem_statement": "A retrieval prototype returned tactics from unrelated projects because scope filtering was applied after ranking instead of before candidate acceptance.",
+  "context": {
+    "constraints": [
+      "Multiple projects shared similar tool names",
+      "The retrieval engine optimized for lexical similarity first",
+      "Authority boundaries needed to remain project-safe"
+    ],
+    "project_scope": "project_family",
+    "toolchain": [
+      "hybrid-retrieval",
+      "vector-index",
+      "metadata-filtering"
+    ]
+  },
+  "action_taken": "Move scope filtering into the retrieval planning stage and reject cross-project candidates before ranking.",
+  "outcome": "Cross-project leakage dropped and the remaining results became easier to explain.",
+  "failure_mode": "Late filtering allowed semantically similar but unauthorized candidates to influence ranking and fusion.",
+  "applicability": {
+    "when_to_apply": [
+      "Projects share vocabulary or similar technical stacks",
+      "Retrieval may surface records from multiple scopes"
+    ],
+    "when_not_to_apply": [
+      "The retrieval surface is intentionally global and the caller explicitly requested global search",
+      "No scope boundary exists for the record class being queried"
+    ]
+  },
+  "evidence_refs": [
+    "ev_mem_20260410_001"
+  ],
+  "authoring_agent": "case-steward",
+  "review_state": "approved",
+  "confidence": 0.88,
+  "derived_at": "2026-04-10T10:30:00Z",
+  "derivation_rule_id": "case-compiler-v1"
+}

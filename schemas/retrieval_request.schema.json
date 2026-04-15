@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["request_id", "query", "project_scope", "intent"],
+  "properties": {
+    "request_id": { "type": "string", "pattern": "^req_[A-Za-z0-9_-]+$" },
+    "query": { "type": "string", "minLength": 1 },
+    "project_scope": { "type": "string", "enum": ["project", "project_family", "global"] },
+    "intent": { "type": "string", "enum": ["action", "analysis", "audit", "research", "verification", "other"] },
+    "allowed_layers": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["evidence", "cases", "invariants", "tactics"] }
+    },
+    "max_results_per_layer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "evidence": { "type": "integer", "minimum": 0 },
+        "cases": { "type": "integer", "minimum": 0 },
+        "invariants": { "type": "integer", "minimum": 0 },
+        "tactics": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

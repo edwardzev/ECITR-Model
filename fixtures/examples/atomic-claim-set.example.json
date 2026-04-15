@@ -1,0 +1,40 @@
+{
+  "claim_set_id": "claimset_scope_retrieval_evidence_001",
+  "evidence_id": "ev_mem_20260410_001",
+  "source_hash": "sha256:atomic-source-example-001",
+  "extracted_at": "2026-04-10T09:15:00Z",
+  "extracted_by": "case-steward",
+  "strategy_id": "atomic-claims-v1",
+  "claims": [
+    {
+      "claim_id": "claim_scope_before_rank_001",
+      "text": "Scope boundaries must be enforced before ranking candidates.",
+      "kind": "constraint",
+      "confidence": 0.9,
+      "source_spans": [
+        {
+          "start_line": 1,
+          "end_line": 1,
+          "start_char": 0,
+          "end_char": 59,
+          "quote": "Scope boundaries must be enforced before ranking candidates."
+        }
+      ]
+    },
+    {
+      "claim_id": "claim_late_filter_leak_001",
+      "text": "Late filtering allows unrelated project records to influence fusion.",
+      "kind": "observation",
+      "confidence": 0.84,
+      "source_spans": [
+        {
+          "start_line": 2,
+          "end_line": 2,
+          "start_char": 0,
+          "end_char": 65,
+          "quote": "Late filtering allows unrelated project records to influence fusion."
+        }
+      ]
+    }
+  ]
+}

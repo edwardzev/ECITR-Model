@@ -1,0 +1,16 @@
+{
+  "task_id": "task_retrieval_runtime_001",
+  "title": "Implement retrieval runtime execution lanes",
+  "objective": "Build execution lanes and fusion for retrieval while preserving planner budgets and conflict visibility.",
+  "affected_layers": [
+    "retrieval"
+  ],
+  "change_class": "retrieval",
+  "requires_research": true,
+  "requires_human_review": false,
+  "deliverables": [
+    "retrieval runtime code",
+    "runtime tests",
+    "updated architecture docs"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "extraction_id",
+    "evidence_id",
+    "extracted_by",
+    "strategy_id"
+  ],
+  "properties": {
+    "extraction_id": { "type": "string", "pattern": "^extract_[A-Za-z0-9_-]+$" },
+    "evidence_id": { "type": "string", "pattern": "^ev_[A-Za-z0-9_-]+$" },
+    "source_text": { "type": "string", "minLength": 1 },
+    "source_text_path": { "type": "string", "minLength": 1 },
+    "extracted_by": { "type": "string", "minLength": 1 },
+    "strategy_id": { "type": "string", "minLength": 1 },
+    "max_claims": { "type": "integer", "minimum": 1, "maximum": 100 },
+    "proposed_claim_set_id": { "type": "string", "pattern": "^claimset_[A-Za-z0-9_-]+$" },
+    "extracted_at": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "anyOf": [
+        { "required": ["source_text"] },
+        { "required": ["source_text_path"] }
+      ]
+    }
+  ]
+}

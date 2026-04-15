@@ -1,0 +1,86 @@
+[
+  {
+    "scenario_id": "action-default",
+    "request": {
+      "request_id": "req_action_001",
+      "query": "How should we fix stale tactic selection in a live run?",
+      "project_scope": "project",
+      "intent": "action"
+    },
+    "expected": {
+      "allowed_layers": ["tactics", "invariants", "cases", "evidence"],
+      "max_results_per_layer": {
+        "tactics": 3,
+        "invariants": 5,
+        "cases": 5,
+        "evidence": 2
+      },
+      "freshness_mode": "strict",
+      "require_evidence": false
+    }
+  },
+  {
+    "scenario_id": "audit-default",
+    "request": {
+      "request_id": "req_audit_001",
+      "query": "Show the supporting evidence for why this case became active.",
+      "project_scope": "project",
+      "intent": "audit"
+    },
+    "expected": {
+      "allowed_layers": ["tactics", "invariants", "cases", "evidence"],
+      "max_results_per_layer": {
+        "tactics": 2,
+        "invariants": 4,
+        "cases": 6,
+        "evidence": 5
+      },
+      "freshness_mode": "strict",
+      "require_evidence": true
+    }
+  },
+  {
+    "scenario_id": "research-default",
+    "request": {
+      "request_id": "req_research_001",
+      "query": "What patterns do we already have for evidence-to-case distillation?",
+      "project_scope": "global",
+      "intent": "research"
+    },
+    "expected": {
+      "allowed_layers": ["invariants", "cases", "evidence"],
+      "max_results_per_layer": {
+        "invariants": 6,
+        "cases": 6,
+        "evidence": 4
+      },
+      "freshness_mode": "balanced",
+      "require_evidence": false
+    }
+  },
+  {
+    "scenario_id": "analysis-override",
+    "request": {
+      "request_id": "req_analysis_001",
+      "query": "Explain the current failure mode and supporting examples.",
+      "project_scope": "project_family",
+      "intent": "analysis",
+      "allowed_layers": ["invariants", "cases", "evidence"],
+      "max_results_per_layer": {
+        "invariants": 3,
+        "cases": 4,
+        "evidence": 2
+      }
+    },
+    "expected": {
+      "allowed_layers": ["invariants", "cases", "evidence"],
+      "max_results_per_layer": {
+        "invariants": 3,
+        "cases": 4,
+        "evidence": 2
+      },
+      "freshness_mode": "balanced",
+      "require_evidence": false
+    }
+  }
+]

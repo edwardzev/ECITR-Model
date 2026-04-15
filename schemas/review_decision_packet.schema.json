@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "decision_id",
+    "record_type",
+    "record_id",
+    "decision",
+    "reviewer",
+    "rationale",
+    "reviewed_at"
+  ],
+  "properties": {
+    "decision_id": { "type": "string", "pattern": "^review_[A-Za-z0-9_-]+$" },
+    "record_type": { "type": "string", "enum": ["case", "invariant", "tactic"] },
+    "record_id": { "type": "string", "minLength": 1 },
+    "decision": { "type": "string", "enum": ["approve", "request_changes", "reject", "deprecate"] },
+    "reviewer": { "type": "string", "minLength": 1 },
+    "rationale": { "type": "string", "minLength": 1 },
+    "reviewed_at": { "type": "string", "format": "date-time" }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "id": "inv_scope_filter_before_rank_001",
+  "series_key": "retrieval.scope-filter-before-rank",
+  "layer": "invariant",
+  "status": "active",
+  "version": 1,
+  "title": "Scope boundaries must be enforced before ranking",
+  "summary": "Candidate scope is an authority constraint, not a cosmetic ranking feature.",
+  "statement": "When records carry project or transfer boundaries, those boundaries must be enforced before ranking or fusion so unauthorized candidates never influence the result set.",
+  "source_case_refs": [
+    "case_retrieval_scope_drift_001"
+  ],
+  "evidence_refs": [
+    "ev_mem_20260410_001"
+  ],
+  "why_it_is_stable": "The need to prevent unauthorized candidates from affecting ranking survives backend changes because it is rooted in authority boundaries rather than any single retrieval engine.",
+  "scope": [
+    "retrieval planning",
+    "cross-project safety",
+    "authority preservation"
+  ],
+  "non_scope": [
+    "global search explicitly requested by the caller",
+    "cosmetic UI ranking concerns"
+  ],
+  "applicability_conditions": [
+    "Records can belong to distinct projects or transfer classes",
+    "The retrieval system supports candidate pruning or metadata filtering"
+  ],
+  "non_applicability_conditions": [
+    "All candidate pools are intentionally global and unbounded"
+  ],
+  "known_breakers": [
+    "Missing or untrusted scope metadata",
+    "Backend adapters that cannot reject out-of-scope candidates early"
+  ],
+  "tool_agnosticity_level": "high",
+  "confidence": 0.84,
+  "created_at": "2026-04-10T11:00:00Z",
+  "updated_at": "2026-04-10T11:00:00Z"
+}

@@ -1,0 +1,354 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "derivation_id",
+    "benchmark_id",
+    "description",
+    "generated_at",
+    "catalog_root",
+    "source_pool",
+    "derivation_method",
+    "thresholds",
+    "total_active_cases",
+    "total_source_cases",
+    "total_existing_active_invariants",
+    "total_seed_pairs",
+    "total_selected_candidates",
+    "approved_candidate_labels",
+    "blocked_candidate_labels",
+    "entries"
+  ],
+  "properties": {
+    "derivation_id": {
+      "type": "string",
+      "pattern": "^ihm_[A-Za-z0-9_-]+$"
+    },
+    "benchmark_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "catalog_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_pool": {
+      "type": "string",
+      "enum": ["active_cases", "uncovered_active_cases"]
+    },
+    "derivation_method": {
+      "type": "string",
+      "enum": ["deterministic_pairwise_rare_token_overlap_v1"]
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "include_covered_cases",
+        "max_candidates",
+        "max_candidates_per_case",
+        "max_rare_token_document_frequency",
+        "min_shared_clauses",
+        "min_shared_rare_tokens",
+        "min_rare_token_score"
+      ],
+      "properties": {
+        "include_covered_cases": {
+          "type": "boolean"
+        },
+        "max_candidates": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_candidates_per_case": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_rare_token_document_frequency": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "min_shared_clauses": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "min_shared_rare_tokens": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "min_rare_token_score": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "total_active_cases": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "total_source_cases": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "total_existing_active_invariants": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "total_seed_pairs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "total_selected_candidates": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "approved_candidate_labels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "blocked_candidate_labels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "expected_decision",
+          "promotion_basis",
+          "series_key",
+          "title",
+          "summary",
+          "statement",
+          "source_case_refs",
+          "why_it_is_stable",
+          "scope",
+          "non_scope",
+          "applicability_conditions",
+          "non_applicability_conditions",
+          "known_breakers",
+          "tool_agnosticity_level",
+          "confidence",
+          "derivation_metadata"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expected_decision": {
+            "type": "string",
+            "enum": ["approve", "block"]
+          },
+          "promotion_basis": {
+            "type": "string",
+            "enum": ["multi_case", "human_approved_single_case"]
+          },
+          "series_key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "statement": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_case_refs": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "string",
+              "pattern": "^case_[A-Za-z0-9_-]+$"
+            }
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^ev_[A-Za-z0-9_-]+$"
+            }
+          },
+          "why_it_is_stable": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scope": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "non_scope": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "applicability_conditions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "non_applicability_conditions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "known_breakers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "tool_agnosticity_level": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "derivation_metadata": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "candidate_id",
+              "source_case_titles",
+              "source_evidence_refs",
+              "shared_clauses",
+              "shared_clause_count",
+              "shared_rare_tokens",
+              "shared_rare_token_count",
+              "rare_token_score",
+              "actual_decision",
+              "reasons",
+              "support_summary"
+            ],
+            "properties": {
+              "candidate_id": {
+                "type": "string",
+                "pattern": "^ihc_[A-Za-z0-9_-]+$"
+              },
+              "source_case_titles": {
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "source_evidence_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^ev_[A-Za-z0-9_-]+$"
+                }
+              },
+              "shared_clauses": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "shared_clause_count": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "shared_rare_tokens": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "shared_rare_token_count": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "rare_token_score": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "actual_decision": {
+                "type": "string",
+                "enum": ["approve", "block"]
+              },
+              "reasons": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "support_summary": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "case_id",
+                    "overlap_count",
+                    "overlap_tokens"
+                  ],
+                  "properties": {
+                    "case_id": {
+                      "type": "string",
+                      "pattern": "^case_[A-Za-z0-9_-]+$"
+                    },
+                    "overlap_count": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "overlap_tokens": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

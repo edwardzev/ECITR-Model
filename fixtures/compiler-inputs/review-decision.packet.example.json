@@ -1,0 +1,9 @@
+{
+  "decision_id": "review_case_scope_retrieval_001",
+  "record_type": "case",
+  "record_id": "case_retrieval_scope_drift_001",
+  "decision": "approve",
+  "reviewer": "governance-qa-steward",
+  "rationale": "The case is evidence-backed, scoped correctly, and ready for activation.",
+  "reviewed_at": "2026-04-10T12:00:00Z"
+}

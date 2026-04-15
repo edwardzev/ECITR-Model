@@ -1,0 +1,18 @@
+{
+  "request_id": "req_fix_cross_project_retrieval_001",
+  "query": "How should ECITR prevent tactics from unrelated projects from surfacing in a project-scoped retrieval request?",
+  "project_scope": "project_family",
+  "intent": "analysis",
+  "allowed_layers": [
+    "tactics",
+    "invariants",
+    "cases",
+    "evidence"
+  ],
+  "max_results_per_layer": {
+    "tactics": 3,
+    "invariants": 5,
+    "cases": 5,
+    "evidence": 3
+  }
+}

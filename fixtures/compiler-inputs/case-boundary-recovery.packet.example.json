@@ -1,0 +1,26 @@
+{
+  "recovery_id": "crx_case_scope_memory_001",
+  "case_id": "case_scope_memory_001",
+  "base_case_version": 1,
+  "evidence_refs": [
+    "ev_scope_memory_001"
+  ],
+  "recovered_at": "2026-04-13T12:00:00.000Z",
+  "recovered_by": "case-boundary-recovery-v1",
+  "strategy_id": "legacy-boundary-recovery-v1",
+  "candidate_boundaries": [
+    {
+      "support_id": "sup_case_scope_memory_recovery_001",
+      "text": "Codex Desktop still does not provide a guaranteed pre-thread hook.",
+      "evidence_ref": "ev_scope_memory_001",
+      "source_kind": "evidence_payload",
+      "source_field": "blockers[0]"
+    }
+  ],
+  "suggested_failure_mode": {
+    "text": "Codex Desktop still does not provide a guaranteed pre-thread hook.",
+    "support_refs": [
+      "sup_case_scope_memory_recovery_001"
+    ]
+  }
+}

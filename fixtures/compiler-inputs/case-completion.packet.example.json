@@ -1,0 +1,51 @@
+{
+  "completion_id": "ccx_case_scope_memory_001",
+  "case_id": "case_scope_memory_001",
+  "base_case_version": 1,
+  "evidence_refs": [
+    "ev_scope_memory_001"
+  ],
+  "prepared_at": "2026-04-11T17:00:00.000Z",
+  "prepared_by": "case-completion-bounded-v1",
+  "strategy_id": "bounded-case-completion-template-v1",
+  "open_questions": [
+    "Confirm or add applicability.when_to_apply before approval.",
+    "Confirm or add applicability.when_not_to_apply before approval."
+  ],
+  "facts": [
+    {
+      "support_id": "sup_case_scope_memory_problem",
+      "text": "Implement repo-level enforcement that treats every Codex Desktop thread in this workspace as meaningful work by default.",
+      "evidence_ref": "ev_scope_memory_001",
+      "source_kind": "case",
+      "source_field": "problem_statement"
+    }
+  ],
+  "boundaries": [
+    {
+      "support_id": "sup_case_scope_memory_boundary_001",
+      "text": "Codex Desktop still does not provide a guaranteed pre-thread hook.",
+      "evidence_ref": "ev_scope_memory_001",
+      "source_kind": "evidence_payload",
+      "source_field": "blockers[0]"
+    }
+  ],
+  "suggested_applicability": {
+    "when_to_apply": [
+      {
+        "text": "When handling the same workspace-level Codex Desktop memory-enforcement problem.",
+        "support_refs": [
+          "sup_case_scope_memory_problem"
+        ]
+      }
+    ],
+    "when_not_to_apply": [
+      {
+        "text": "When the recorded runtime boundary no longer holds.",
+        "support_refs": [
+          "sup_case_scope_memory_boundary_001"
+        ]
+      }
+    ]
+  }
+}

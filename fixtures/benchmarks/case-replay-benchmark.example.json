@@ -1,0 +1,24 @@
+{
+  "benchmark_id": "case_replay_benchmark_example",
+  "description": "Labeled cohort for replaying the full current case pipeline from original draft state.",
+  "entries": [
+    {
+      "case_id": "case_example_viable",
+      "label": "Clearly viable case",
+      "expected_bucket": "viable",
+      "note": "Should likely approve when replayed from the original draft under the current pipeline."
+    },
+    {
+      "case_id": "case_example_borderline",
+      "label": "Borderline case",
+      "expected_bucket": "borderline",
+      "note": "May approve or block depending on current extraction/completion quality."
+    },
+    {
+      "case_id": "case_example_nonqualifying",
+      "label": "Clearly non-qualifying case",
+      "expected_bucket": "non_qualifying",
+      "note": "Should block when replayed from the original draft under the current pipeline."
+    }
+  ]
+}

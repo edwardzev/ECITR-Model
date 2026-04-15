@@ -1,0 +1,20 @@
+{
+  "benchmark_id": "case_review_benchmark_example",
+  "description": "Example benchmark manifest for dry-run case promotion evaluation.",
+  "entries": [
+    {
+      "case_id": "case_example_should_approve",
+      "mode": "readiness",
+      "expected_decision": "approve",
+      "label": "Strong active case",
+      "note": "Use readiness mode for already-active or already-completed records."
+    },
+    {
+      "case_id": "case_example_should_block",
+      "mode": "draft_flow",
+      "expected_decision": "block",
+      "label": "Weak draft case",
+      "note": "Use draft_flow mode when the benchmark should exercise complete -> approval readiness without writing."
+    }
+  ]
+}

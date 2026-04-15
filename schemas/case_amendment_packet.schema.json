@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "amendment_id",
+    "case_id",
+    "base_case_version",
+    "reviewer",
+    "rationale",
+    "amended_at",
+    "changes"
+  ],
+  "properties": {
+    "amendment_id": { "type": "string", "pattern": "^cam_[A-Za-z0-9_-]+$" },
+    "case_id": { "type": "string", "pattern": "^case_[A-Za-z0-9_-]+$" },
+    "completion_id": { "type": "string", "pattern": "^ccx_[A-Za-z0-9_-]+$" },
+    "base_case_version": { "type": "integer", "minimum": 1 },
+    "reviewer": { "type": "string", "minLength": 1 },
+    "rationale": { "type": "string", "minLength": 1 },
+    "amended_at": { "type": "string", "format": "date-time" },
+    "changes": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "problem_statement": { "type": "string", "minLength": 1 },
+        "context": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "constraints": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+            "project_scope": { "type": "string", "enum": ["project", "project_family", "global", "blocked"] },
+            "toolchain": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+          }
+        },
+        "action_taken": { "type": "string", "minLength": 1 },
+        "outcome": { "type": "string", "minLength": 1 },
+        "failure_mode": { "type": "string", "minLength": 1 },
+        "applicability": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["when_to_apply", "when_not_to_apply"],
+          "properties": {
+            "when_to_apply": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+            "when_not_to_apply": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+          }
+        },
+        "open_questions": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

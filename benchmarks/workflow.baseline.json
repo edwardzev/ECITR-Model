@@ -1,0 +1,25 @@
+[
+  {
+    "scenario_id": "workflow_retrieval_review_ready_001",
+    "task": {
+      "task_id": "task_retrieval_runtime_upgrade_001",
+      "title": "Refine retrieval execution",
+      "objective": "Adjust retrieval execution while preserving scope-safe behavior.",
+      "affected_layers": ["retrieval", "cases"],
+      "change_class": "retrieval",
+      "requires_research": true
+    },
+    "request": {
+      "request_id": "req_workflow_retrieval_001",
+      "query": "How should ECITR prevent unrelated project records from influencing ranking and fusion?",
+      "project_scope": "project_family",
+      "intent": "analysis"
+    },
+    "expected": {
+      "primary_role": "Retrieval Architect",
+      "requires_governance_review": true,
+      "requires_research": true,
+      "top_tactic": "tac_metadata_prune_before_vector_rank_001"
+    }
+  }
+]

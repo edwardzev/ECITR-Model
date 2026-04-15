@@ -1,0 +1,4 @@
+Scope boundaries must be enforced before ranking candidates.
+Late filtering allows unrelated project records to influence fusion.
+Metadata pruning should happen before vector ranking in a multi-project corpus.
+This rule exists because unauthorized candidates must never affect the result set.

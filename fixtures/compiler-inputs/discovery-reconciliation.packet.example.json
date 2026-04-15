@@ -1,0 +1,12 @@
+{
+  "reconciliation_id": "reconcile_invariant_case_case_example",
+  "target_layer": "invariant",
+  "source_record_type": "case",
+  "source_record_id": "case_example",
+  "source_snapshot_hash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "source_status": "active",
+  "outcome": "blocked",
+  "rationale": "No autonomous invariant candidate currently references this active case under the governed discovery surface.",
+  "related_record_refs": [],
+  "reconciled_at": "2026-04-13T12:00:00.000Z"
+}

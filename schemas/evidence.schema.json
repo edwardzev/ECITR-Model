@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "evidence_id",
+    "substrate_ref",
+    "source_type",
+    "source_locator",
+    "captured_at",
+    "project_scope",
+    "actor_scope",
+    "verbatim_payload_ref",
+    "payload_hash",
+    "source_hash",
+    "redaction_state",
+    "immutable"
+  ],
+  "properties": {
+    "evidence_id": { "type": "string", "minLength": 1, "pattern": "^ev_[A-Za-z0-9_-]+$" },
+    "substrate_ref": { "type": "string", "minLength": 1 },
+    "source_type": { "type": "string", "enum": ["chat", "file", "log", "diff", "web", "test", "other"] },
+    "source_locator": { "type": "string", "minLength": 1 },
+    "captured_at": { "type": "string", "format": "date-time" },
+    "project_scope": { "type": "string", "enum": ["project", "project_family", "global", "blocked"] },
+    "actor_scope": { "type": "string", "enum": ["human", "agent", "system", "mixed"] },
+    "verbatim_payload_ref": { "type": "string", "minLength": 1 },
+    "payload_hash": { "type": "string", "minLength": 1 },
+    "source_hash": { "type": "string", "minLength": 1 },
+    "parent_evidence_id": { "type": "string", "pattern": "^ev_[A-Za-z0-9_-]+$" },
+    "correction_of": { "type": "string", "pattern": "^ev_[A-Za-z0-9_-]+$" },
+    "redaction_state": { "type": "string", "enum": ["none", "partial", "full"] },
+    "immutable": { "type": "boolean", "const": true }
+  }
+}

@@ -1,0 +1,36 @@
+[
+  {
+    "scenario_id": "analysis-default-example-catalog",
+    "request": {
+      "request_id": "req_runtime_baseline_001",
+      "query": "scope filter ranking project retrieval",
+      "project_scope": "project_family",
+      "intent": "analysis"
+    },
+    "expected": {
+      "results": {
+        "tactics": ["tac_metadata_prune_before_vector_rank_001"],
+        "invariants": ["inv_scope_filter_before_rank_001"],
+        "cases": ["case_retrieval_scope_drift_001"],
+        "evidence": ["ev_mem_20260410_001"]
+      }
+    }
+  },
+  {
+    "scenario_id": "audit-default-example-catalog",
+    "request": {
+      "request_id": "req_runtime_baseline_002",
+      "query": "supporting evidence for scope filter ranking",
+      "project_scope": "project_family",
+      "intent": "audit"
+    },
+    "expected": {
+      "results": {
+        "tactics": ["tac_metadata_prune_before_vector_rank_001"],
+        "invariants": ["inv_scope_filter_before_rank_001"],
+        "cases": ["case_retrieval_scope_drift_001"],
+        "evidence": ["ev_mem_20260410_001"]
+      }
+    }
+  }
+]

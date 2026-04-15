@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "audit_id",
+    "decision_id",
+    "record_type",
+    "record_id",
+    "decision",
+    "previous_status",
+    "resulting_status",
+    "reviewer",
+    "rationale",
+    "reviewed_at",
+    "record_snapshot_hash"
+  ],
+  "properties": {
+    "audit_id": { "type": "string", "pattern": "^audit_[A-Za-z0-9_-]+$" },
+    "decision_id": { "type": "string", "pattern": "^review_[A-Za-z0-9_-]+$" },
+    "record_type": { "type": "string", "enum": ["case", "invariant", "tactic"] },
+    "record_id": { "type": "string", "minLength": 1 },
+    "decision": { "type": "string", "enum": ["approve", "request_changes", "reject", "deprecate"] },
+    "previous_status": { "type": "string", "minLength": 1 },
+    "resulting_status": { "type": "string", "minLength": 1 },
+    "previous_review_state": { "type": "string", "minLength": 1 },
+    "resulting_review_state": { "type": "string", "minLength": 1 },
+    "reviewer": { "type": "string", "minLength": 1 },
+    "rationale": { "type": "string", "minLength": 1 },
+    "reviewed_at": { "type": "string", "format": "date-time" },
+    "record_snapshot_hash": { "type": "string", "minLength": 1 }
+  }
+}
