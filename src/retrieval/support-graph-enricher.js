@@ -1,6 +1,10 @@
 const { confidenceRank } = require("../support-graph/types");
 const { expandRelated, listNeighbors } = require("../support-graph/query");
 const { DEFAULT_GRAPH_ROOT, loadFreshSnapshot } = require("../support-graph/refresh");
+const {
+  buildParameterIndexes,
+  isObservationVisible,
+} = require("../parameters/retrieval");
 
 const MAX_GRAPH_EXPLANATIONS = 6;
 const ALLOWED_CONFIDENCE_LABELS = new Set(["DECLARED", "EXTRACTED"]);
@@ -16,6 +20,7 @@ function enrichResponseWithSupportGraph({
   request,
   plan,
   catalogs,
+  graphBasisCatalogs,
   graphRoot = DEFAULT_GRAPH_ROOT,
 } = {}) {
   const enrichment = generateSupportGraphEnrichment({
@@ -23,6 +28,7 @@ function enrichResponseWithSupportGraph({
     request,
     plan,
     catalogs,
+    graphBasisCatalogs,
     graphRoot,
   });
 
@@ -44,9 +50,13 @@ function generateSupportGraphEnrichment({
   request,
   plan,
   catalogs,
+  graphBasisCatalogs,
   graphRoot = DEFAULT_GRAPH_ROOT,
 } = {}) {
-  const snapshot = loadFreshSnapshot({ graphRoot, catalogs });
+  const snapshot = loadFreshSnapshot({
+    graphRoot,
+    catalogs: graphBasisCatalogs ?? catalogs,
+  });
   const diagnostics = {
     graph_snapshot_used: Boolean(snapshot),
     explanation_count_added: 0,
@@ -62,6 +72,7 @@ function generateSupportGraphEnrichment({
   }
 
   const explanations = [];
+  const isVisibleSupportNode = buildSupportNodeVisibility(catalogs);
 
   for (const layer of plan.allowed_layers ?? ["tactics", "invariants", "cases", "evidence"]) {
     for (const recordId of response?.results?.[layer] ?? []) {
@@ -74,6 +85,8 @@ function generateSupportGraphEnrichment({
         layer,
         recordId,
         projectScope: request.project_scope,
+        workspaceId: request.workspace_id ?? null,
+        isVisibleSupportNode,
       });
       diagnostics.wrong_scope_suppression_count += result.wrongScopeSuppressionCount;
       if (!result.explanation) {
@@ -96,11 +109,19 @@ function generateSupportGraphEnrichment({
   };
 }
 
-function selectExplanationPath({ snapshot, layer, recordId, projectScope }) {
+function selectExplanationPath({
+  snapshot,
+  layer,
+  recordId,
+  projectScope,
+  workspaceId = null,
+  isVisibleSupportNode = () => true,
+}) {
   const oneHop = listNeighbors({
     snapshot,
     nodeId: recordId,
     projectScope,
+    workspaceId,
     limit: 100,
   });
   const candidates = [];
@@ -108,6 +129,9 @@ function selectExplanationPath({ snapshot, layer, recordId, projectScope }) {
 
   for (const entry of oneHop) {
     if (!ALLOWED_CONFIDENCE_LABELS.has(entry.edge.confidence_label)) {
+      continue;
+    }
+    if (!isVisibleSupportNode(entry.node)) {
       continue;
     }
     if (!isAllowedTarget({ layer, nodeType: entry.node.node_type })) {
@@ -130,10 +154,14 @@ function selectExplanationPath({ snapshot, layer, recordId, projectScope }) {
   }
 
   if (candidates.length === 0) {
+    const nodesById = new Map(
+      (snapshot.nodes ?? []).map((node) => [node.node_id, node]),
+    );
     const expanded = expandRelated({
       snapshot,
       nodeId: recordId,
       projectScope,
+      workspaceId,
       maxDepth: 2,
       limit: 100,
       canonicalOnly: false,
@@ -144,6 +172,15 @@ function selectExplanationPath({ snapshot, layer, recordId, projectScope }) {
         continue;
       }
       if (!isAllowedTarget({ layer, nodeType: entry.node.node_type })) {
+        continue;
+      }
+      if (!isVisibleSupportNode(entry.node)) {
+        continue;
+      }
+      if ((entry.example_path?.node_path ?? [])
+        .slice(1, -1)
+        .map((nodeId) => nodesById.get(nodeId))
+        .some((node) => !node || !isVisibleSupportNode(node))) {
         continue;
       }
       if (!entry.example_path?.steps?.every((step) => ALLOWED_CONFIDENCE_LABELS.has(step.confidence_label))) {
@@ -176,6 +213,45 @@ function selectExplanationPath({ snapshot, layer, recordId, projectScope }) {
   return {
     explanation: formatExplanation({ layer, recordId, candidate: candidates[0] }),
     wrongScopeSuppressionCount,
+  };
+}
+
+function buildSupportNodeVisibility(catalogs = {}) {
+  const currentEvidenceIds = new Set(
+    (catalogs.evidence ?? []).map((record) => record.evidence_id),
+  );
+  const parameterIndexes = buildParameterIndexes(catalogs);
+  const visibleObservations = new Set(
+    (catalogs.parameter_observations ?? [])
+      .filter((observation) => isObservationVisible(observation, parameterIndexes))
+      .filter((observation) =>
+        !parameterIndexes.supersededObservationIds.has(observation.observation_id))
+      .map((observation) => observation.observation_id),
+  );
+  const visibleDefinitions = new Set(
+    (catalogs.parameter_observations ?? [])
+      .filter((observation) => visibleObservations.has(observation.observation_id))
+      .map((observation) => observation.definition_id),
+  );
+  const visibleClaimSets = new Set(
+    (catalogs.atomic_claim_sets ?? [])
+      .filter((claimSet) => currentEvidenceIds.has(claimSet.evidence_id))
+      .map((claimSet) => claimSet.claim_set_id),
+  );
+
+  return (node) => {
+    switch (node.node_type) {
+      case "evidence":
+        return currentEvidenceIds.has(node.record_id);
+      case "parameter_observation":
+        return visibleObservations.has(node.record_id);
+      case "parameter_definition":
+        return visibleDefinitions.has(node.record_id);
+      case "atomic_claim_set":
+        return visibleClaimSets.has(node.record_id);
+      default:
+        return true;
+    }
   };
 }
 

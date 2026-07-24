@@ -11,32 +11,35 @@ function runCaseBatch({
   limit = 10,
   status = "draft",
   reviewState,
+  workspaceId,
   batchLogDir = DEFAULT_BATCH_LOG_DIR,
-  skipPreviouslyBlocked = true,
+  skipPreviouslyFailed,
   dryRun = false,
   reviewer = "governance-qa-steward",
   decisionRationale = "Approved after bounded completion and current benchmark-governed readiness gate.",
   completionReviewer = "case-steward",
   completionRationale = "Completed via bounded applicability generation under the current gate.",
-  rejectErrors = false,
-  rejectionRationale = "Autonomous reconciliation blocked this draft under the current governed case gate.",
+  rejectErrors = true,
+  rejectionRationale = "Autonomous reconciliation rejected this draft because it could not satisfy the current governed case gate.",
 } = {}) {
   if (!surface) {
     throw new Error("runCaseBatch requires a case review surface");
   }
 
-  const blockedCaseIds = skipPreviouslyBlocked ? collectPreviouslyBlockedCaseIds({ batchLogDir }) : new Set();
+  const shouldSkipPreviouslyFailed = skipPreviouslyFailed ?? true;
+  const failedCaseIds = shouldSkipPreviouslyFailed ? collectPreviouslyFailedCaseIds({ batchLogDir }) : new Set();
   const queue = surface.listPendingCases({
     limit: Number.MAX_SAFE_INTEGER,
     reviewState,
     status,
+    workspaceId,
   }).cases;
 
   const selectedCases = [];
-  const skippedBlockedCases = [];
+  const skippedFailedCases = [];
   for (const item of queue) {
-    if (blockedCaseIds.has(item.case_id)) {
-      skippedBlockedCases.push(item.case_id);
+    if (failedCaseIds.has(item.case_id)) {
+      skippedFailedCases.push(item.case_id);
       continue;
     }
     selectedCases.push(item);
@@ -56,8 +59,42 @@ function runCaseBatch({
     const caseId = item.case_id;
     const preparedAt = new Date(nowBase + index).toISOString();
     const reviewedAt = new Date(nowBase + 1000 + index).toISOString();
+    let caseRecord = null;
 
     try {
+      caseRecord = getCaseRecord(surface, caseId);
+      const initialReadiness = caseRecord ? evaluateApprovalReadiness(caseRecord) : null;
+      if (initialReadiness?.approval_ready) {
+        const decision = dryRun
+          ? applyApprovalDryRun({
+              surface,
+              caseRecord,
+              reviewer,
+              rationale: decisionRationale,
+              reviewedAt,
+            })
+          : surface.applyDecision({
+              caseId,
+              decision: "approve",
+              reviewer,
+              rationale: decisionRationale,
+              reviewedAt,
+              dryRun,
+            });
+
+        approved += 1;
+        results.push({
+          case_id: caseId,
+          status: "approved",
+          completion_id: null,
+          amendment_id: null,
+          completion_skipped_reason: "already_approval_ready",
+          audit_id: decision.auditEntry.audit_id,
+          readiness: initialReadiness,
+        });
+        continue;
+      }
+
       const completion = surface.completeDraft({
         caseId,
         reviewer: completionReviewer,
@@ -143,8 +180,9 @@ function runCaseBatch({
     approved,
     rejected,
     errors,
-    skip_previously_blocked: skipPreviouslyBlocked,
-    skipped_previously_blocked_count: skippedBlockedCases.length,
+    reject_errors: rejectErrors,
+    skip_previously_failed: shouldSkipPreviouslyFailed,
+    skipped_previously_failed_count: skippedFailedCases.length,
     case_ids: selectedCases.map((item) => item.case_id),
     results,
   };
@@ -190,17 +228,32 @@ function applyApprovalDryRun({ surface, caseRecord, reviewer, rationale, reviewe
   });
 }
 
-function collectPreviouslyBlockedCaseIds({ batchLogDir = DEFAULT_BATCH_LOG_DIR } = {}) {
-  const blocked = new Set();
+function getCaseRecord(surface, caseId) {
+  if (surface?.catalog && typeof surface.catalog.getRecord === "function") {
+    return surface.catalog.getRecord("case", caseId);
+  }
+  return null;
+}
+
+function evaluateApprovalReadiness(caseRecord) {
+  const reasons = explainCaseCompleteness(caseRecord);
+  return {
+    approval_ready: hasCompleteCaseFraming(caseRecord) && reasons.length === 0,
+    reasons,
+  };
+}
+
+function collectPreviouslyFailedCaseIds({ batchLogDir = DEFAULT_BATCH_LOG_DIR } = {}) {
+  const failed = new Set();
   for (const logPath of listBatchLogPaths({ batchLogDir })) {
     const log = JSON.parse(fs.readFileSync(logPath, "utf8"));
     for (const result of log.results ?? []) {
-      if (isBlockedResult(result)) {
-        blocked.add(result.case_id);
+      if (isFailedResult(result)) {
+        failed.add(result.case_id);
       }
     }
   }
-  return blocked;
+  return failed;
 }
 
 function listBatchLogPaths({ batchLogDir = DEFAULT_BATCH_LOG_DIR } = {}) {
@@ -227,16 +280,16 @@ function nextBatchId({ batchLogDir = DEFAULT_BATCH_LOG_DIR } = {}) {
   return `batch-${String(max + 1).padStart(3, "0")}`;
 }
 
-function isBlockedResult(result) {
+function isFailedResult(result) {
   if (!result || !result.case_id) {
     return false;
   }
-  return result.status === "error" || result.status === "blocked" || result.status === "rejected";
+  return result.status === "error" || result.status === "failed_precondition";
 }
 
 module.exports = {
   DEFAULT_BATCH_LOG_DIR,
-  collectPreviouslyBlockedCaseIds,
+  collectPreviouslyFailedCaseIds,
   listBatchLogPaths,
   nextBatchId,
   runCaseBatch,

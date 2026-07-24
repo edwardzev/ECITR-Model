@@ -1,0 +1,15 @@
+{
+  "decision": "narrow",
+  "rationale": "The source cases share a real daemon migration pattern, but a nearby counterexample requires excluding vocabulary-only matches.",
+  "narrowed_entry": {
+    "title": "Bound daemon MCP promotion to transport migrations",
+    "summary": "Apply daemon MCP guidance only when the task is migrating a per-reload stdio server to a healthchecked local HTTP endpoint.",
+    "statement": "When an MCP migration replaces per-reload stdio launch with a singleton local HTTP daemon, preserve rollback and exclude docs-only daemon configuration work.",
+    "non_scope": [
+      "Cases that mention daemon configuration but do not involve MCP transport migration."
+    ],
+    "known_breakers": [
+      "Counterexample case case_daemon_config_docs_only must remain excluded."
+    ]
+  }
+}

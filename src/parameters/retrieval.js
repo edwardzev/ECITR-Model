@@ -3,6 +3,12 @@ function buildParameterIndexes(catalogs = {}) {
   const observationsById = new Map();
   const observationsByEvidenceId = new Map();
   const supersededObservationIds = new Set();
+  const enforceCurrentEvidenceVisibility = Array.isArray(catalogs.evidence);
+  const currentEvidenceIds = new Set(
+    (catalogs.evidence ?? [])
+      .map((record) => record?.evidence_id)
+      .filter(Boolean),
+  );
 
   for (const definition of catalogs.parameter_definitions ?? []) {
     definitionsById.set(definition.definition_id, definition);
@@ -27,6 +33,8 @@ function buildParameterIndexes(catalogs = {}) {
     observationsById,
     observationsByEvidenceId,
     supersededObservationIds,
+    enforceCurrentEvidenceVisibility,
+    currentEvidenceIds,
   };
 }
 
@@ -74,12 +82,23 @@ function filterVisibleObservations(observations, parameterIndexes) {
   return [...new Map(
     observations
       .filter(Boolean)
-      .filter((observation) => !superseded.has(observation.observation_id))
+      .filter((observation) =>
+        !superseded.has(observation.observation_id)
+        && isObservationVisible(observation, parameterIndexes))
       .map((observation) => [observation.observation_id, observation]),
   ).values()].sort((left, right) =>
     String(left.observed_at).localeCompare(String(right.observed_at))
       || String(left.parameter_key).localeCompare(String(right.parameter_key))
       || String(left.observation_id).localeCompare(String(right.observation_id)));
+}
+
+function isObservationVisible(observation, parameterIndexes) {
+  if (!parameterIndexes?.enforceCurrentEvidenceVisibility) {
+    return true;
+  }
+
+  return (observation.source_evidence_refs ?? []).some((evidenceId) =>
+    parameterIndexes.currentEvidenceIds.has(evidenceId));
 }
 
 function formatObservation(observation, parameterIndexes) {
@@ -119,4 +138,5 @@ module.exports = {
   buildParameterSummary,
   buildParameterSummaryForRecord,
   getObservationsForRecord,
+  isObservationVisible,
 };

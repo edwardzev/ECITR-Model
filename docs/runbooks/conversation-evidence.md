@@ -89,7 +89,10 @@ The intended default cadence for Codex runtime refresh is low-frequency, not nea
 - scheduled refresh once per day overnight
 - manual refresh when recent chat evidence is needed sooner
 
-The intended scheduler owner is ECITR itself through the local `launchd` job. The installed job now runs the autonomous ECITR refresh command, which captures Codex evidence first and then distills supported evidence into draft cases:
+The intended scheduler owner is ECITR itself through the local `launchd` job.
+The installed job runs the autonomous wrapper, which captures Codex evidence,
+refreshes parameter support and case drafts, runs governed promotion, refreshes
+the support graph, and independently syncs the derived LanceDB index:
 
 ```bash
 npm run refresh:codex:launchd -- install
@@ -103,6 +106,12 @@ npm run refresh:codex:launchd -- uninstall
 ```
 
 `launchd` should run missed calendar jobs once the machine wakes, so the practical target remains the first successful run after the machine is active again.
+
+Each scheduled run writes its full structured summary under
+`.local/reports/autonomous-refresh/` and retains the newest `30` reports. The
+same summary is atomically published as `latest.json`. The launchd stdout stream
+contains only a compact report pointer and status summary.
+Oversized stdout and stderr logs rotate at `5 MiB`, with `5` generations retained.
 
 ## Boundary
 

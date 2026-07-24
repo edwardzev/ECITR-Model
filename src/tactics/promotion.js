@@ -16,6 +16,7 @@ class TacticPromotionPipeline {
     const createdAt = packet.created_at ?? this.now();
     const draft = {
       id: packet.proposed_tactic_id ?? createTacticId(packet.promotion_id),
+      promotion_basis: packet.promotion_basis ?? "invariant_backed",
       series_key: packet.series_key,
       layer: "tactic",
       status: "draft",
@@ -38,6 +39,10 @@ class TacticPromotionPipeline {
       created_at: createdAt,
       updated_at: createdAt,
     };
+
+    if (packet.workspace_id) {
+      draft.workspace_id = packet.workspace_id;
+    }
 
     if (packet.expiry_at) {
       draft.expiry_at = packet.expiry_at;
@@ -66,16 +71,20 @@ class TacticPromotionPipeline {
       throw new Error("Only draft tactics may be activated.");
     }
 
+    const activatedAt = this.now();
     const active = {
       ...draft,
       status: "active",
-      updated_at: this.now(),
+      updated_at: activatedAt,
     };
 
     this.validator.validateRecord("tactic", active);
     assertLifecycleRecord("tactic", active);
 
-    const freshness = evaluateTacticFreshness(active, options);
+    const freshness = evaluateTacticFreshness(active, {
+      ...options,
+      now: options.now ?? new Date(activatedAt),
+    });
     if (!freshness.usable) {
       throw new Error(`Cannot activate non-fresh tactic: ${freshness.reasons.join("; ")}`);
     }

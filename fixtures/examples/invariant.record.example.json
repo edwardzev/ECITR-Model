@@ -1,5 +1,6 @@
 {
   "id": "inv_scope_filter_before_rank_001",
+  "workspace_id": "ecitr_model",
   "series_key": "retrieval.scope-filter-before-rank",
   "layer": "invariant",
   "status": "active",

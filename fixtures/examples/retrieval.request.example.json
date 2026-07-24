@@ -1,6 +1,7 @@
 {
   "request_id": "req_fix_cross_project_retrieval_001",
   "query": "How should ECITR prevent tactics from unrelated projects from surfacing in a project-scoped retrieval request?",
+  "workspace_id": "ecitr_model",
   "project_scope": "project_family",
   "intent": "analysis",
   "allowed_layers": [

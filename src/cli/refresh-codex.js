@@ -22,8 +22,10 @@ function parseArgs(args) {
     dryRun: false,
     includeSessions: true,
     includeArchived: true,
+    workspaceRoot: null,
     skipStructuralCheck: false,
     recreateCollection: false,
+    skipQdrantSync: true,
     embedderType: process.env.ECITR_EMBEDDER ?? "openai",
     embeddingModel: process.env.ECITR_EMBEDDING_MODEL,
     sparseBucketCount: 2048,
@@ -70,6 +72,15 @@ function parseArgs(args) {
         break;
       case "--dry-run":
         options.dryRun = true;
+        break;
+      case "--skip-qdrant-sync":
+        options.skipQdrantSync = true;
+        break;
+      case "--sync-qdrant":
+        options.skipQdrantSync = false;
+        break;
+      case "--workspace-root":
+        options.workspaceRoot = args[++index];
         break;
       case "--skip-sessions":
         options.includeSessions = false;

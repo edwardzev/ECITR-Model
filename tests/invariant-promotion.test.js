@@ -12,6 +12,7 @@ test("invariant promotion compiles a draft invariant from a staging packet", () 
 
   assert.equal(draft.status, "draft");
   assert.equal(draft.id, packet.proposed_invariant_id);
+  assert.equal(draft.workspace_id, "ecitr_model");
 });
 
 test("multi-case promotion requires at least two source cases", () => {

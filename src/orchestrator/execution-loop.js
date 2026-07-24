@@ -1,15 +1,19 @@
 const { ReviewWorkflow } = require("../review/workflow");
-const { RetrievalRuntime } = require("../retrieval/runtime");
 const { FileBackedCatalog } = require("../storage/file-backed-catalog");
 const { OrchestratorRuntime } = require("./delegation-runtime");
 const { RuntimeInterventionRunner } = require("../runtime/intervention-runner");
+const {
+  ProjectMemorySurface,
+  createProjectMemoryRetrievalRuntime,
+} = require("../runtime/project-memory");
 
 class OrchestratorExecutionLoop {
   constructor({
     catalog,
     router = new OrchestratorRuntime(),
-    retrievalRuntime = new RetrievalRuntime(),
+    retrievalRuntime = createProjectMemoryRetrievalRuntime(),
     interventionRunner = new RuntimeInterventionRunner({ retrievalRuntime }),
+    projectMemorySurface = new ProjectMemorySurface({ catalog, retrievalRuntime }),
     reviewWorkflow = new ReviewWorkflow(),
   } = {}) {
     if (!(catalog instanceof FileBackedCatalog)) {
@@ -20,17 +24,27 @@ class OrchestratorExecutionLoop {
     this.router = router;
     this.retrievalRuntime = retrievalRuntime;
     this.interventionRunner = interventionRunner;
+    this.projectMemorySurface = projectMemorySurface;
     this.reviewWorkflow = reviewWorkflow;
   }
 
   async run({ taskPacket, retrievalRequest, intervention, now = new Date() }) {
     const routingPlan = this.router.route(taskPacket);
     const catalogs = this.catalog.loadRuntimeCatalogs();
+    const memorySurface = this.projectMemorySurface.describe();
     let retrieval = null;
     let interventionResult = null;
+    let memoryInvocation = null;
 
     if (retrievalRequest) {
       retrieval = await this.retrievalRuntime.execute({ request: retrievalRequest, catalogs, now });
+      memoryInvocation = this.projectMemorySurface.logConsultation({
+        taskPacket,
+        consultTrigger: "explicit_request",
+        request: retrievalRequest,
+        retrieval,
+        now,
+      });
     } else if (intervention) {
       const interventionExecution = await this.interventionRunner.run({
         intervention,
@@ -39,6 +53,18 @@ class OrchestratorExecutionLoop {
       });
       retrieval = interventionExecution.retrieval;
       interventionResult = interventionExecution.intervention;
+      memoryInvocation = this.projectMemorySurface.logConsultation({
+        taskPacket,
+        consultTrigger: intervention.mode,
+        request: null,
+        retrieval,
+        now,
+      });
+    } else {
+      memoryInvocation = this.projectMemorySurface.logTaskOpportunity({
+        taskPacket,
+        now,
+      });
     }
 
     return {
@@ -46,7 +72,14 @@ class OrchestratorExecutionLoop {
       routing_plan: routingPlan,
       retrieval,
       intervention: interventionResult,
-      next_actions: buildNextActions({ routingPlan, retrieval }),
+      memory_surface: memorySurface,
+      memory_invocation: memoryInvocation,
+      next_actions: buildNextActions({
+        routingPlan,
+        retrieval,
+        memorySurface,
+        memoryInvocation,
+      }),
       catalog_counts: {
         evidence: catalogs.evidence.length,
         cases: catalogs.cases.length,
@@ -73,9 +106,25 @@ class OrchestratorExecutionLoop {
 
     return reviewResult;
   }
+
+  async searchProjectMemory(args) {
+    return this.projectMemorySurface.searchProjectMemory(args);
+  }
+
+  async search_project_memory(args) {
+    return this.searchProjectMemory(args);
+  }
+
+  recordMemoryUsage(args) {
+    return this.projectMemorySurface.recordMemoryUsage(args);
+  }
+
+  record_memory_usage(args) {
+    return this.recordMemoryUsage(args);
+  }
 }
 
-function buildNextActions({ routingPlan, retrieval }) {
+function buildNextActions({ routingPlan, retrieval, memorySurface, memoryInvocation }) {
   const actions = [];
 
   actions.push(`primary owner: ${routingPlan.primary_role}`);
@@ -90,6 +139,14 @@ function buildNextActions({ routingPlan, retrieval }) {
 
   if (retrieval?.response?.results?.tactics?.length) {
     actions.push(`top tactic candidate: ${retrieval.response.results.tactics[0]}`);
+  }
+
+  if (memorySurface?.available) {
+    actions.push(`project memory available via ${memorySurface.tool_name}`);
+  }
+
+  if (memoryInvocation?.memory_consulted) {
+    actions.push(`memory consulted via ${memoryInvocation.consult_trigger}`);
   }
 
   return actions;

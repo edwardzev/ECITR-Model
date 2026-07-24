@@ -20,6 +20,7 @@ async function refreshAgentOpsIndex({
   qdrantUrl = DEFAULT_QDRANT_URL,
   collectionName = DEFAULT_COLLECTION_NAME,
   dryRun = false,
+  skipQdrantSync = true,
   skipSmokeCheck = false,
   recreateCollection = false,
   embedderType = process.env.ECITR_EMBEDDER ?? "openai",
@@ -83,6 +84,16 @@ async function refreshAgentOpsIndex({
     validator,
   });
   summary.catalog_counts = countCatalogRecords(catalogs);
+
+  if (skipQdrantSync) {
+    summary.qdrant_sync = {
+      status: "skipped",
+      endpoint: qdrantUrl,
+      collection_name: collectionName,
+    };
+    summary.smoke_checks = { status: "skipped_qdrant_sync" };
+    return summary;
+  }
 
   summary.qdrant_sync = await syncCatalog({
     catalogs,

@@ -1,8 +1,15 @@
-const crypto = require("node:crypto");
-
 const { SemanticRetrievalBackend } = require("../semantic-backend-interface");
-const { buildEvidenceRetrievalText } = require("../evidence-text");
-const { buildParameterIndexes, buildParameterSummaryForRecord } = require("../../parameters/retrieval");
+const {
+  assertSemanticCatalogs,
+  assertSemanticEmbedder,
+  assertSemanticEmbedding,
+  buildContextualText,
+  buildSemanticCatalogIndex,
+  buildSemanticExportRecords,
+  computeSemanticQueryLimit,
+  embedSemanticExportRecords,
+  toSemanticDocumentId,
+} = require("../semantic-export");
 
 const DEFAULT_DENSE_VECTOR_NAME = "dense";
 const DEFAULT_SPARSE_VECTOR_NAME = "sparse";
@@ -23,6 +30,7 @@ class QdrantSemanticBackend extends SemanticRetrievalBackend {
     sparseVectorName = DEFAULT_SPARSE_VECTOR_NAME,
     prefetchLimit = DEFAULT_PREFETCH_LIMIT,
     defaultQueryLimit = DEFAULT_QUERY_LIMIT,
+    minimumRelevanceScore = null,
   }) {
     super({
       backendId: "qdrant-hybrid-prototype-v1",
@@ -51,6 +59,7 @@ class QdrantSemanticBackend extends SemanticRetrievalBackend {
     this.sparseVectorName = sparseVectorName;
     this.prefetchLimit = prefetchLimit;
     this.defaultQueryLimit = defaultQueryLimit;
+    this.minimumRelevanceScore = normalizeOptionalNumber(minimumRelevanceScore);
   }
 
   async ensureCollection({ denseVectorSize, recreate = false } = {}) {
@@ -90,7 +99,7 @@ class QdrantSemanticBackend extends SemanticRetrievalBackend {
 
   async buildUpsertOperation({ catalogs = this.catalogs } = {}) {
     assertCatalogs(catalogs);
-    const exportedRecords = buildExportRecords(catalogs, {
+    const exportedRecords = buildSemanticExportRecords(catalogs, {
       embeddingSignature: this.embedder.embeddingSignature ?? null,
     });
     const points = await exportRecordsToQdrantPoints({
@@ -127,13 +136,13 @@ class QdrantSemanticBackend extends SemanticRetrievalBackend {
 
   async buildSyncPlan({ catalogs = this.catalogs } = {}) {
     assertCatalogs(catalogs);
-    const exportedRecords = buildExportRecords(catalogs, {
+    const exportedRecords = buildSemanticExportRecords(catalogs, {
       embeddingSignature: this.embedder.embeddingSignature ?? null,
     });
     const existingPointHashes = await this.fetchExistingPointHashes();
-    const desiredPointIds = new Set(exportedRecords.map((entry) => entry.pointId));
+    const desiredPointIds = new Set(exportedRecords.map((entry) => entry.documentId));
     const recordsToUpsert = exportedRecords.filter(
-      (entry) => existingPointHashes.get(entry.pointId) !== entry.payload?.content_hash,
+      (entry) => existingPointHashes.get(entry.documentId) !== entry.payload?.content_hash,
     );
     const pointIdsToDelete = [...existingPointHashes.keys()].filter((pointId) => !desiredPointIds.has(pointId));
     const pointsToUpsert = await exportRecordsToQdrantPoints({
@@ -216,8 +225,9 @@ class QdrantSemanticBackend extends SemanticRetrievalBackend {
 
   async retrieve({ request, plan, catalogs = this.catalogs, now = new Date() }) {
     assertCatalogs(catalogs);
+    await this.assertCurrentCatalogCoverage({ catalogs });
     const queryEmbedding = await this.embedder.embedQuery({ query: request.query });
-    const limit = computeQueryLimit(plan, this.defaultQueryLimit);
+    const limit = computeSemanticQueryLimit(plan, this.defaultQueryLimit);
     const prefetchLimit = Math.max(this.prefetchLimit, limit);
     const filter = buildQdrantPayloadFilter({ request, plan, now });
 
@@ -255,7 +265,29 @@ class QdrantSemanticBackend extends SemanticRetrievalBackend {
         ? response.result
         : [];
 
-    return mapQdrantPointsToCandidates({ points, catalogs });
+    return mapQdrantPointsToCandidates({
+      points,
+      catalogs,
+      minimumRelevanceScore: this.minimumRelevanceScore,
+    });
+  }
+
+  async assertCurrentCatalogCoverage({ catalogs = this.catalogs } = {}) {
+    assertCatalogs(catalogs);
+    const exportedRecords = buildSemanticExportRecords(catalogs, {
+      embeddingSignature: this.embedder.embeddingSignature ?? null,
+    });
+    const existingPointHashes = await this.fetchExistingPointHashes();
+    const mismatches = diffSemanticIndexCoverage({
+      exportedRecords,
+      existingPointHashes,
+    });
+
+    if (mismatches.length > 0) {
+      throw new Error(
+        `Qdrant semantic index does not match the canonical catalog: ${mismatches.join("; ")}`,
+      );
+    }
   }
 }
 
@@ -266,7 +298,7 @@ async function exportCatalogToQdrantPoints({
   sparseVectorName = DEFAULT_SPARSE_VECTOR_NAME,
 }) {
   assertCatalogs(catalogs);
-  const exportedRecords = buildExportRecords(catalogs, {
+  const exportedRecords = buildSemanticExportRecords(catalogs, {
     embeddingSignature: embedder.embeddingSignature ?? null,
   });
 
@@ -288,177 +320,19 @@ async function exportRecordsToQdrantPoints({
     throw new Error("exportRecordsToQdrantPoints requires an exportedRecords array.");
   }
 
-  const embeddings = await embedder.embedDocuments({
-    documents: exportedRecords.map((entry) => entry.contextualText),
-  });
-
-  if (!Array.isArray(embeddings) || embeddings.length !== exportedRecords.length) {
-    throw new Error("Embedder returned an invalid document embedding set.");
-  }
-
-  return exportedRecords.map((entry, index) => {
-    const embedding = embeddings[index];
+  const embeddedRecords = await embedSemanticExportRecords({ exportedRecords, embedder });
+  return embeddedRecords.map(({ exportRecord, embedding }) => {
     assertEmbedding(embedding, "document");
 
     return {
-      id: entry.pointId,
+      id: exportRecord.documentId,
       vector: {
         [denseVectorName]: embedding.dense,
         [sparseVectorName]: embedding.sparse,
       },
-      payload: entry.payload,
+      payload: exportRecord.payload,
     };
   });
-}
-
-function buildExportRecords(catalogs, { embeddingSignature = null } = {}) {
-  const atomicClaimsByEvidence = buildAtomicClaimIndex(catalogs.atomic_claim_sets ?? []);
-  const parameterIndexes = buildParameterIndexes(catalogs);
-  const exported = [];
-
-  for (const layer of ["tactics", "invariants", "cases", "evidence"]) {
-    for (const record of catalogs[layer] ?? []) {
-      if (!isRetrievableRecord(layer, record)) {
-        continue;
-      }
-      const recordId = getRecordId(layer, record);
-      exported.push({
-        layer,
-        recordId,
-        pointId: toQdrantPointId(layer, recordId),
-        projectScope: getProjectScope(layer, record),
-        status: getStatus(layer, record),
-        reviewState: layer === "cases" ? record.review_state ?? null : null,
-        contextualText: buildContextualText(layer, record, atomicClaimsByEvidence, {
-          catalogRoot: catalogs.__catalogRoot,
-          parameterIndexes,
-        }),
-        record: structuredClone(record),
-      });
-
-      const current = exported[exported.length - 1];
-      current.payload = buildPointPayload({
-        layer: current.layer,
-        recordId: current.recordId,
-        projectScope: current.projectScope,
-        status: current.status,
-        reviewState: current.reviewState,
-        contextualText: current.contextualText,
-        record: current.record,
-        embeddingSignature,
-      });
-    }
-  }
-
-  return exported;
-}
-
-function buildContextualText(layer, record, atomicClaimsByEvidence, { catalogRoot, parameterIndexes } = {}) {
-  const header = [
-    `Layer: ${layer}.`,
-    `Project scope: ${getProjectScope(layer, record)}.`,
-    `Status: ${getStatus(layer, record)}.`,
-  ];
-
-  switch (layer) {
-    case "tactics":
-      return [
-        ...header,
-        `Title: ${record.title}.`,
-        `Summary: ${record.summary}.`,
-        `Action: ${record.action}.`,
-        `Steps: ${(record.steps ?? []).join(" ")}`,
-        `Fallbacks: ${(record.fallbacks ?? []).join(" ")}`,
-        buildParameterSummaryForRecord(layer, record, parameterIndexes),
-      ].join(" ");
-    case "invariants":
-      return [
-        ...header,
-        `Title: ${record.title}.`,
-        `Summary: ${record.summary}.`,
-        `Statement: ${record.statement}.`,
-        `Applicability: ${(record.applicability_conditions ?? []).join(" ")}`,
-        `Non applicability: ${(record.non_applicability_conditions ?? []).join(" ")}`,
-      ].join(" ");
-    case "cases":
-      return [
-        ...header,
-        `Problem: ${record.problem_statement}.`,
-        `Action: ${record.action_taken}.`,
-        `Outcome: ${record.outcome}.`,
-        `Failure mode: ${record.failure_mode}.`,
-        `Apply when: ${(record.applicability?.when_to_apply ?? []).join(" ")}`,
-        `Do not apply when: ${(record.applicability?.when_not_to_apply ?? []).join(" ")}`,
-        buildParameterSummaryForRecord(layer, record, parameterIndexes),
-      ].filter(Boolean).join(" ");
-    case "evidence":
-      return [
-        ...header,
-        buildEvidenceRetrievalText(record, {
-          catalogRoot,
-          atomicClaims: atomicClaimsByEvidence.get(record.evidence_id) ?? [],
-          parameterIndexes,
-        }),
-      ].join(" ");
-    default:
-      throw new Error(`Unsupported export layer: ${layer}`);
-  }
-}
-
-function buildPointPayload({
-  layer,
-  recordId,
-  projectScope,
-  status,
-  reviewState,
-  contextualText,
-  record,
-  embeddingSignature,
-}) {
-  const payload = {
-    layer,
-    record_id: recordId,
-    project_scope: projectScope,
-    status,
-    review_state: reviewState,
-    text: contextualText,
-    record,
-    embedding_signature: embeddingSignature,
-    updated_at: getUpdatedAt(layer, record),
-    captured_at: layer === "evidence" ? record.captured_at ?? null : null,
-    derived_at: layer === "cases" ? record.derived_at ?? null : null,
-    source_type: layer === "evidence" ? record.source_type ?? null : null,
-    actor_scope: layer === "evidence" ? record.actor_scope ?? null : null,
-    has_invalidation_markers: layer === "tactics"
-      ? Array.isArray(record.invalidated_by) && record.invalidated_by.length > 0
-      : false,
-    fresh_until: layer === "tactics" ? computeFreshUntil(record) : null,
-  };
-
-  payload.content_hash = createContentHash({
-    layer,
-    recordId,
-    payload,
-  });
-
-  return payload;
-}
-
-function createContentHash(value) {
-  return `sha256:${crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
-}
-
-function buildAtomicClaimIndex(claimSets) {
-  const index = new Map();
-
-  for (const claimSet of claimSets) {
-    index.set(
-      claimSet.evidence_id,
-      (claimSet.claims ?? []).map((claim) => claim.text),
-    );
-  }
-
-  return index;
 }
 
 function buildQdrantPayloadFilter({ request, plan, now = new Date() }) {
@@ -508,6 +382,15 @@ function buildQdrantPayloadFilter({ request, plan, now = new Date() }) {
     ];
   }
 
+  if (request.workspace_id) {
+    filter.must.push({
+      key: "workspace_id",
+      match: {
+        value: request.workspace_id,
+      },
+    });
+  }
+
   return filter;
 }
 
@@ -546,17 +429,23 @@ function buildStrictTacticFreshnessFilter({ now }) {
   };
 }
 
-function mapQdrantPointsToCandidates({ points, catalogs }) {
-  const fallbackIndex = buildCatalogIndex(catalogs);
+function mapQdrantPointsToCandidates({
+  points,
+  catalogs,
+  minimumRelevanceScore = null,
+}) {
+  const canonicalIndex = buildSemanticCatalogIndex(catalogs);
 
   return points
     .map((point) => {
       const payload = point.payload ?? {};
       const layer = normalizeLayer(payload.layer);
       const recordId = String(payload.record_id ?? point.id).replace(/^[^:]+:/, "");
-      const record = payload.record ?? fallbackIndex.get(`${layer}:${recordId}`);
+      const record = layer
+        ? canonicalIndex.get(`${layer}:${recordId}`)
+        : null;
 
-      if (!layer || !record) {
+      if (!layer || !recordId || !record) {
         return null;
       }
 
@@ -567,91 +456,51 @@ function mapQdrantPointsToCandidates({ points, catalogs }) {
         score: Number(point.score ?? 0),
         record,
         reasons: ["qdrant hybrid semantic retrieval"],
+        semanticQualified: minimumRelevanceScore != null
+          && Number(point.score ?? 0) >= minimumRelevanceScore,
       };
     })
     .filter(Boolean);
 }
 
-function buildCatalogIndex(catalogs) {
-  const index = new Map();
+function normalizeOptionalNumber(value) {
+  if (value == null || value === "") {
+    return null;
+  }
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    throw new Error("Semantic relevance threshold must be a finite number.");
+  }
+  return number;
+}
 
-  for (const layer of ["tactics", "invariants", "cases", "evidence"]) {
-    for (const record of catalogs[layer] ?? []) {
-      index.set(`${layer}:${getRecordId(layer, record)}`, record);
+function diffSemanticIndexCoverage({ exportedRecords, existingPointHashes }) {
+  const expectedPointHashes = new Map(
+    exportedRecords.map((entry) => [String(entry.documentId), entry.payload?.content_hash ?? null]),
+  );
+  const mismatches = [];
+
+  if (expectedPointHashes.size !== existingPointHashes.size) {
+    mismatches.push(`expected ${expectedPointHashes.size} point(s), found ${existingPointHashes.size}`);
+  }
+
+  for (const [pointId, contentHash] of expectedPointHashes) {
+    if (!existingPointHashes.has(pointId)) {
+      mismatches.push(`missing canonical point ${pointId}`);
+      continue;
+    }
+    if (existingPointHashes.get(pointId) !== contentHash) {
+      mismatches.push(`content hash mismatch for ${pointId}`);
     }
   }
 
-  return index;
-}
-
-function computeQueryLimit(plan, fallback) {
-  const budgetValues = Object.values(plan.max_results_per_layer ?? {}).filter((value) => Number.isInteger(value));
-  const summedBudget = budgetValues.reduce((sum, value) => sum + value, 0);
-  return Math.max(fallback, summedBudget || fallback);
-}
-
-function getRecordId(layer, record) {
-  switch (layer) {
-    case "tactics":
-    case "invariants":
-      return record.id;
-    case "cases":
-      return record.case_id;
-    case "evidence":
-      return record.evidence_id;
-    default:
-      throw new Error(`Unsupported layer: ${layer}`);
-  }
-}
-
-function getProjectScope(layer, record) {
-  switch (layer) {
-    case "cases":
-      return record.context?.project_scope ?? "global";
-    case "evidence":
-      return record.project_scope ?? "global";
-    default:
-      return "global";
-  }
-}
-
-function getStatus(layer, record) {
-  if (layer === "evidence") {
-    return "immutable";
+  for (const pointId of existingPointHashes.keys()) {
+    if (!expectedPointHashes.has(pointId)) {
+      mismatches.push(`unexpected derived point ${pointId}`);
+    }
   }
 
-  return record.status ?? "draft";
-}
-
-function getUpdatedAt(layer, record) {
-  switch (layer) {
-    case "tactics":
-    case "invariants":
-      return record.updated_at ?? record.created_at ?? null;
-    case "cases":
-      return record.derived_at ?? null;
-    case "evidence":
-      return record.captured_at ?? null;
-    default:
-      return null;
-  }
-}
-
-function computeFreshUntil(record) {
-  const candidates = [record.expiry_at, record.revalidate_at]
-    .filter(Boolean)
-    .map((value) => new Date(value));
-
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  candidates.sort((left, right) => left.getTime() - right.getTime());
-  return candidates[0].toISOString();
-}
-
-function isRetrievableRecord(layer, record) {
-  return layer === "evidence" || record.status === "active";
+  return mismatches.slice(0, 10);
 }
 
 function normalizeLayer(value) {
@@ -663,19 +512,11 @@ function normalizeLayer(value) {
 }
 
 function assertCatalogs(catalogs) {
-  if (!catalogs) {
-    throw new Error("QdrantSemanticBackend requires runtime catalogs.");
-  }
-
-  return catalogs;
+  return assertSemanticCatalogs(catalogs);
 }
 
 function assertEmbedder(embedder) {
-  if (!embedder || typeof embedder.embedQuery !== "function" || typeof embedder.embedDocuments !== "function") {
-    throw new Error("QdrantSemanticBackend requires an embedder with embedQuery and embedDocuments.");
-  }
-
-  return embedder;
+  return assertSemanticEmbedder(embedder);
 }
 
 function assertFetch(fetchImpl) {
@@ -687,11 +528,7 @@ function assertFetch(fetchImpl) {
 }
 
 function assertEmbedding(embedding, label) {
-  if (!embedding || !Array.isArray(embedding.dense) || !embedding.sparse) {
-    throw new Error(`Invalid ${label} embedding payload.`);
-  }
-
-  return embedding;
+  return assertSemanticEmbedding(embedding, label);
 }
 
 async function executeQdrantRequest({ fetchImpl, endpoint, path, method, body }) {
@@ -746,25 +583,15 @@ function stripTrailingSlash(value) {
 }
 
 function toQdrantPointId(layer, recordId) {
-  const digest = crypto
-    .createHash("sha256")
-    .update(`${layer}:${recordId}`)
-    .digest("hex")
-    .slice(0, 32);
-
-  return [
-    digest.slice(0, 8),
-    digest.slice(8, 12),
-    digest.slice(12, 16),
-    digest.slice(16, 20),
-    digest.slice(20, 32),
-  ].join("-");
+  return toSemanticDocumentId(layer, recordId);
 }
 
 module.exports = {
   QdrantSemanticBackend,
+  diffSemanticIndexCoverage,
   exportCatalogToQdrantPoints,
   buildQdrantPayloadFilter,
   buildContextualText,
+  mapQdrantPointsToCandidates,
   toQdrantPointId,
 };

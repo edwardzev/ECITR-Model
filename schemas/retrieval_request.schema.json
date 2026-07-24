@@ -6,6 +6,10 @@
   "properties": {
     "request_id": { "type": "string", "pattern": "^req_[A-Za-z0-9_-]+$" },
     "query": { "type": "string", "minLength": 1 },
+    "workspace_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+    },
     "project_scope": { "type": "string", "enum": ["project", "project_family", "global"] },
     "intent": { "type": "string", "enum": ["action", "analysis", "audit", "research", "verification", "other"] },
     "allowed_layers": {

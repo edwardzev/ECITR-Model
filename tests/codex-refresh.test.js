@@ -17,6 +17,7 @@ test("codex refresh imports before sync and structural validation", async () => 
   const summary = await refreshCodexIndex({
     codexRoot: "/tmp/.codex",
     catalogRoot: "/tmp/catalog",
+    skipQdrantSync: false,
     importRollouts(options) {
       calls.push({ step: "rollouts", dryRun: options.dryRun });
       return {

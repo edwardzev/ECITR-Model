@@ -37,6 +37,42 @@ function main() {
     return;
   }
 
+  if (command === "revalidate") {
+    assertTacticOptions(options, "revalidate");
+    if (!options.revalidateAt) {
+      throw new Error("revalidate requires --revalidate-at");
+    }
+    if (options.validatedOn.length === 0) {
+      throw new Error("revalidate requires at least one --validated-on");
+    }
+    process.stdout.write(`${JSON.stringify(surface.revalidateTactic({
+      tacticId: options.tacticId,
+      reviewer: options.reviewer,
+      rationale: options.rationale,
+      reviewedAt: options.reviewedAt,
+      revalidateAt: options.revalidateAt,
+      validatedOn: options.validatedOn,
+      dryRun: options.dryRun,
+    }), null, 2)}\n`);
+    return;
+  }
+
+  if (command === "decide") {
+    assertTacticOptions(options, "decide");
+    if (!options.decision) {
+      throw new Error("decide requires --decision");
+    }
+    process.stdout.write(`${JSON.stringify(surface.applyDecision({
+      tacticId: options.tacticId,
+      decision: options.decision,
+      reviewer: options.reviewer,
+      rationale: options.rationale,
+      reviewedAt: options.reviewedAt,
+      dryRun: options.dryRun,
+    }), null, 2)}\n`);
+    return;
+  }
+
   if (command === "show") {
     if (!options.tacticId) {
       throw new Error("show requires --tactic-id");
@@ -56,7 +92,10 @@ function parseArgs(args) {
     tacticId: undefined,
     reviewer: undefined,
     rationale: undefined,
+    decision: undefined,
     reviewedAt: new Date().toISOString(),
+    revalidateAt: undefined,
+    validatedOn: [],
     dryRun: false,
   };
   let command = "show";
@@ -65,6 +104,8 @@ function parseArgs(args) {
     const arg = args[index];
     switch (arg) {
       case "promote-candidate":
+      case "revalidate":
+      case "decide":
       case "show":
         command = arg;
         break;
@@ -86,8 +127,17 @@ function parseArgs(args) {
       case "--rationale":
         options.rationale = args[++index];
         break;
+      case "--decision":
+        options.decision = args[++index];
+        break;
       case "--reviewed-at":
         options.reviewedAt = args[++index];
+        break;
+      case "--revalidate-at":
+        options.revalidateAt = args[++index];
+        break;
+      case "--validated-on":
+        options.validatedOn.push(args[++index]);
         break;
       case "--dry-run":
         options.dryRun = true;
@@ -98,6 +148,18 @@ function parseArgs(args) {
   }
 
   return { command, options };
+}
+
+function assertTacticOptions(options, command) {
+  if (!options.tacticId) {
+    throw new Error(`${command} requires --tactic-id`);
+  }
+  if (!options.reviewer) {
+    throw new Error(`${command} requires --reviewer`);
+  }
+  if (!options.rationale) {
+    throw new Error(`${command} requires --rationale`);
+  }
 }
 
 function loadManifestEntry(manifestPath, label) {

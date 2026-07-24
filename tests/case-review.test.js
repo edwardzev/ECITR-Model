@@ -4,8 +4,43 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const { CaseReviewSurface } = require("../src/cases/case-review");
+const { CaseReviewSurface, evaluateCaseReadiness } = require("../src/cases/case-review");
 const { FileBackedCatalog } = require("../src/storage/file-backed-catalog");
+
+function createSeedDerivedCase(overrides = {}) {
+  return {
+    case_id: "case_seed_readiness",
+    case_version: 1,
+    status: "draft",
+    problem_statement: "A closeout-authored seed captured a reusable implementation decision.",
+    context: {
+      constraints: [
+        "Seed semantics must remain authored by the acting agent.",
+      ],
+      project_scope: "project",
+      toolchain: [],
+    },
+    action_taken: "Replaced the closeout schema with a discriminated union.",
+    outcome: "Future closeouts expose accurate reusable seed semantics.",
+    failure_mode: "Generic readiness heuristics can reject valid closeout actions.",
+    applicability: {
+      when_to_apply: [
+        "A future agent is deciding whether the same closeout-authored implementation pattern applies.",
+        "The run evidence includes ecitr_closeout.decision = candidate.",
+      ],
+      when_not_to_apply: [
+        "The work was only a read-only status inspection with no intervention or evidence-capture result.",
+      ],
+    },
+    evidence_refs: ["ev_seed_readiness"],
+    review_state: "draft",
+    confidence: 0.82,
+    derived_at: "2026-05-05T12:00:00.000Z",
+    derivation_rule_id: "case-seed-closeout-v1",
+    open_questions: [],
+    ...overrides,
+  };
+}
 
 test("case review surface lists draft cases ordered by open questions then age", () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-case-review-"));
@@ -47,6 +82,49 @@ test("case review surface lists draft cases ordered by open questions then age",
   assert.equal(result.total_pending, 2);
   assert.deepEqual(result.cases.map((entry) => entry.case_id), ["case_a", "case_b"]);
   assert.equal(result.cases[0].approval_ready, false);
+});
+
+test("case review surface can filter pending cases by workspace id", () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-case-review-"));
+  const catalog = new FileBackedCatalog({ rootDir });
+
+  catalog.writeRecord("case", {
+    case_id: "case_msbc",
+    case_version: 1,
+    status: "draft",
+    problem_statement: "MSBC draft",
+    action_taken: "Patched report layout handling.",
+    outcome: "Outcome",
+    evidence_refs: ["ev_msbc"],
+    review_state: "draft",
+    confidence: 0.7,
+    derived_at: "2026-04-11T10:00:00.000Z",
+    derivation_rule_id: "case-autodistill-run-v1",
+    open_questions: [],
+    workspace_id: "ms_business_central",
+  });
+  catalog.writeRecord("case", {
+    case_id: "case_other",
+    case_version: 1,
+    status: "draft",
+    problem_statement: "Other draft",
+    action_taken: "Patched another repo.",
+    outcome: "Outcome",
+    evidence_refs: ["ev_other"],
+    review_state: "draft",
+    confidence: 0.7,
+    derived_at: "2026-04-11T10:05:00.000Z",
+    derivation_rule_id: "case-autodistill-run-v1",
+    open_questions: [],
+    workspace_id: "other_workspace",
+  });
+
+  const surface = new CaseReviewSurface({ catalogRoot: rootDir });
+  const result = surface.listPendingCases({ workspaceId: "ms_business_central" });
+
+  assert.equal(result.workspace_id, "ms_business_central");
+  assert.equal(result.total_pending, 1);
+  assert.deepEqual(result.cases.map((entry) => entry.case_id), ["case_msbc"]);
 });
 
 test("case review inspection returns the matching staged packet and evidence headers", () => {
@@ -357,7 +435,7 @@ test("case review complete recovers a missing failure boundary from linked evide
   assert.equal(result.review_readiness.approval_ready, true);
 });
 
-test("case review complete leaves primitive drafts blocked when recovery finds no bounded boundary", () => {
+test("case review complete refuses primitive drafts when recovery finds no bounded boundary", () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-case-review-"));
   const catalog = new FileBackedCatalog({ rootDir });
   const payloadDir = path.join(rootDir, "payloads", "evidence", "tests");
@@ -517,6 +595,37 @@ test("case review complete leaves the draft non-approval-ready when action_taken
   );
 });
 
+test("case review readiness accepts substantive closeout seed action phrasing", () => {
+  const actionCases = [
+    "Replaced the MCP field with a discriminated union for candidate, none, and not_applicable closeouts.",
+    "Generated positive and negative pilot zips using source invoice headers as templates and updated record counts.",
+    "Exported 2024 source data from Business Central and generated a reconciled workbook.",
+    "Introduced shared heartbeat lease defaults, ECS env wiring, and regression tests.",
+  ];
+
+  for (const action_taken of actionCases) {
+    const readiness = evaluateCaseReadiness(createSeedDerivedCase({ action_taken }));
+
+    assert.equal(
+      readiness.approval_ready,
+      true,
+      `${action_taken} should be approval-ready: ${readiness.reasons.join("; ")}`,
+    );
+  }
+});
+
+test("case review readiness still blocks read-only closeout seed action phrasing", () => {
+  const readiness = evaluateCaseReadiness(createSeedDerivedCase({
+    action_taken: "Inspected launchd jobs, Codex automations, crontab, and ECITR refresh-autonomous code.",
+  }));
+
+  assert.equal(readiness.approval_ready, false);
+  assert.match(
+    readiness.reasons.join(" ; "),
+    /action_taken must contain at least one substantive intervention or evidence-capture step/,
+  );
+});
+
 test("case review amendment writes a staged packet, increments version, and clears prior review state", () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-case-review-"));
   const catalog = new FileBackedCatalog({ rootDir });
@@ -614,7 +723,7 @@ test("case review surface persists approval and writes an audit entry", () => {
   assert.equal(catalog.countRecords("review_audit_entry"), 1);
 });
 
-test("case review surface blocks approval when applicability is boilerplate-only", () => {
+test("case review surface refuses approval when applicability is boilerplate-only", () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-case-review-"));
   const catalog = new FileBackedCatalog({ rootDir });
 
@@ -622,7 +731,7 @@ test("case review surface blocks approval when applicability is boilerplate-only
     case_id: "case_review_boilerplate_001",
     case_version: 1,
     status: "draft",
-    problem_statement: "Blocked by boilerplate applicability",
+    problem_statement: "Rejected by boilerplate applicability",
     context: {
       constraints: ["The same blocker still exists."],
       project_scope: "project",
@@ -632,7 +741,7 @@ test("case review surface blocks approval when applicability is boilerplate-only
     outcome: "The issue was resolved locally.",
     failure_mode: "The same blocker still exists.",
     applicability: {
-      when_to_apply: ["When handling the same case-shaped problem: Blocked by boilerplate applicability"],
+      when_to_apply: ["When handling the same case-shaped problem: Rejected by boilerplate applicability"],
       when_not_to_apply: [
         "When any of the recorded constraints or blockers no longer holds for the current situation.",
         "When the runtime, scheduling surface, or enforcement mechanism is materially different from the recorded boundaries in this case.",
@@ -661,7 +770,7 @@ test("case review surface blocks approval when applicability is boilerplate-only
   );
 });
 
-test("case review surface blocks approval when the only reuse line is incidental setup", () => {
+test("case review surface refuses approval when the only reuse line is incidental setup", () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-case-review-"));
   const catalog = new FileBackedCatalog({ rootDir });
 
@@ -669,7 +778,7 @@ test("case review surface blocks approval when the only reuse line is incidental
     case_id: "case_review_incidental_001",
     case_version: 1,
     status: "draft",
-    problem_statement: "Blocked by incidental applicability",
+    problem_statement: "Rejected by incidental applicability",
     context: {
       constraints: ["The same blocker still exists."],
       project_scope: "project",
@@ -1291,18 +1400,18 @@ test("case review surface blocks approval when failure_mode describes a non-bloc
   );
 });
 
-test("case review surface blocks approval when framing is incomplete", () => {
+test("case review surface refuses approval when framing is incomplete", () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-case-review-"));
   const catalog = new FileBackedCatalog({ rootDir });
 
   catalog.writeRecord("case", {
-    case_id: "case_review_blocked_001",
+    case_id: "case_review_incomplete_001",
     case_version: 1,
     status: "draft",
-    problem_statement: "Blocked case",
+    problem_statement: "Incomplete case",
     action_taken: "Action",
     outcome: "Outcome",
-    evidence_refs: ["ev_blocked_001"],
+    evidence_refs: ["ev_incomplete_001"],
     review_state: "draft",
     confidence: 0.7,
     derived_at: "2026-04-11T12:40:00.000Z",
@@ -1315,7 +1424,7 @@ test("case review surface blocks approval when framing is incomplete", () => {
   assert.throws(
     () =>
       surface.applyDecision({
-        caseId: "case_review_blocked_001",
+        caseId: "case_review_incomplete_001",
         decision: "approve",
         reviewer: "governance-qa-steward",
         rationale: "Try to approve an incomplete draft.",

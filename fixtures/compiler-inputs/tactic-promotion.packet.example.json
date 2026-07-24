@@ -1,6 +1,8 @@
 {
   "promotion_id": "tpp_metadata_prune_before_vector_rank_001",
+  "promotion_basis": "invariant_backed",
   "proposed_tactic_id": "tac_metadata_prune_before_vector_rank_001",
+  "workspace_id": "ecitr_model",
   "version": 1,
   "series_key": "retrieval.metadata-prune-before-vector-rank",
   "title": "Apply metadata pruning before vector ranking in hybrid retrieval",
@@ -16,7 +18,7 @@
     "ev_mem_20260410_001"
   ],
   "parameter_observation_refs": [
-    "paramobs_ecitr_qdrant_url_ev_mem_20260410_001"
+    "paramobs_01041f2d5c6ded7a1520"
   ],
   "tool_binding": [
     "hybrid-retrieval",

@@ -28,6 +28,26 @@ It must still survive freshness checks such as:
 - invalidation markers
 - environment mismatch
 
+## Revalidation Rule
+
+Revalidation is a governed review action, not a timestamp edit.
+
+An active tactic may receive a later `revalidate_at` only when an immutable,
+schema-versioned tactic revalidation packet records:
+
+- the previous and next freshness boundaries;
+- the reviewer, rationale, and review time;
+- active, lifecycle-valid source cases;
+- active supporting invariants, when cited;
+- resolvable evidence;
+- explicit review of invalidation markers, environment bounds, and tool bounds;
+- the validation surfaces used; and
+- hashes of the previous and resulting tactic records.
+
+If any cited support is missing, inactive, or invalid, the tactic must remain
+unusable and be deprecated or superseded. Revalidation packets are immutable
+and live under `review/tactic-revalidations/` in the catalog root.
+
 ## Runtime Rule
 
 Retrieval may surface active tactics by default only when they are still fresh enough for the current request mode.

@@ -9,7 +9,8 @@ const { TacticDiscoverySurface } = require("../src/tactics/discovery");
 const { runTacticDiscoveryBenchmark } = require("../src/tactics/discovery-benchmark");
 const { loadExample } = require("./helpers/load-example");
 
-test("tactic discovery approves a supported tactic candidate grounded in active cases and invariants", () => {
+test("tactic discovery approves a supported tactic candidate grounded in active cases and invariants", (t) => {
+  useFixedClock(t);
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-tactic-discovery-"));
 
   try {
@@ -83,7 +84,8 @@ test("tactic discovery approves a supported tactic candidate grounded in active 
   }
 });
 
-test("tactic discovery blocks a mismatched candidate even when cases and invariant exist", () => {
+test("tactic discovery blocks a mismatched candidate even when cases and invariant exist", (t) => {
+  useFixedClock(t);
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-tactic-discovery-"));
 
   try {
@@ -151,7 +153,8 @@ test("tactic discovery blocks a mismatched candidate even when cases and invaria
   }
 });
 
-test("tactic discovery benchmark reports expected decisions", () => {
+test("tactic discovery benchmark reports expected decisions", (t) => {
+  useFixedClock(t);
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-tactic-discovery-"));
   const manifestPath = path.join(rootDir, "benchmark.json");
 
@@ -198,6 +201,7 @@ test("tactic discovery benchmark reports expected decisions", () => {
       manifestPath,
       JSON.stringify({
         benchmark_id: "tactic_discovery_test_v1",
+        evaluation_at: "2026-06-30T00:00:00Z",
         entries: [
           {
             label: "approve_qdrant_runtime",
@@ -246,12 +250,14 @@ test("tactic discovery benchmark reports expected decisions", () => {
       }, null, 2),
     );
 
+    t.mock.timers.setTime(new Date("2026-07-02T00:00:00.000Z").getTime());
     const result = runTacticDiscoveryBenchmark({
       manifestPath,
       catalogRoot: rootDir,
     });
 
     assert.equal(result.matches_expected, 2);
+    assert.equal(result.evaluation_at, "2026-06-30T00:00:00Z");
     assert.equal(result.false_positives, 0);
     assert.equal(result.false_negatives, 0);
   } finally {
@@ -259,7 +265,8 @@ test("tactic discovery benchmark reports expected decisions", () => {
   }
 });
 
-test("tactic discovery blocks process-only tactics even with strong case and invariant overlap", () => {
+test("tactic discovery blocks process-only tactics even with strong case and invariant overlap", (t) => {
+  useFixedClock(t);
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-tactic-discovery-"));
 
   try {
@@ -364,4 +371,11 @@ function buildInvariant({ invariantId, evidenceRefs, title, summary, statement, 
   record.non_applicability_conditions = nonApplicability;
   record.known_breakers = breakers;
   return record;
+}
+
+function useFixedClock(t) {
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-05-01T00:00:00.000Z"),
+  });
 }

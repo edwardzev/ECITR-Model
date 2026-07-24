@@ -40,8 +40,11 @@ class CaseReviewSurface {
     this.reviewWorkflow = reviewWorkflow;
   }
 
-  listPendingCases({ limit = 25, reviewState, status = "draft" } = {}) {
+  listPendingCases({ limit = 25, reviewState, status = "draft", workspaceId } = {}) {
     let records = this.catalog.listRecords("case").filter((record) => record.status === status);
+    if (workspaceId) {
+      records = records.filter((record) => record.workspace_id === workspaceId);
+    }
     if (reviewState) {
       records = records.filter((record) => record.review_state === reviewState);
     }
@@ -49,6 +52,7 @@ class CaseReviewSurface {
     records.sort(compareCasesForReview);
 
     return {
+      workspace_id: workspaceId ?? null,
       total_pending: records.length,
       returned: records.slice(0, limit).length,
       cases: records.slice(0, limit).map(toCaseQueueItem),
@@ -820,8 +824,6 @@ function isStrongInterventionActionLine(line) {
     "recommendation",
     "recommendations",
     "tracker",
-    "template",
-    "templates",
     "morning review",
     "live corpus",
     "session/run/draft health",
@@ -837,12 +839,19 @@ function isStrongInterventionActionLine(line) {
     "added ",
     "expanded ",
     "patched ",
+    "replaced ",
     "removed ",
     "set ",
     "enabled ",
     "deployed ",
     "implemented ",
     "extended ",
+    "created ",
+    "generated ",
+    "changed ",
+    "refactored ",
+    "exported ",
+    "introduced ",
     "imported ",
     "uploaded ",
     "replayed ",

@@ -1,0 +1,42 @@
+{
+  "artifact_type": "live_invariant_candidate",
+  "candidate_id": "lic_example_001",
+  "layer": "invariant",
+  "status": "staged",
+  "workspace_id": "ecitr_model",
+  "derivation_method": "live_case_cluster_v1",
+  "source_case_refs": [
+    "case_memory_gate_001",
+    "case_memory_gate_002"
+  ],
+  "evidence_refs": [
+    "ev_memory_gate_001",
+    "ev_memory_gate_002"
+  ],
+  "entry": {
+    "label": "live_memory_gate_example",
+    "expected_decision": "approve",
+    "promotion_basis": "multi_case",
+    "title": "Live candidate: memory gates",
+    "summary": "Active cases repeat a memory gate pattern.",
+    "statement": "Canonical memory changes should pass through staged review gates.",
+    "source_case_refs": [
+      "case_memory_gate_001",
+      "case_memory_gate_002"
+    ]
+  },
+  "support_signals": {
+    "score": 0.82,
+    "shared_tokens": [
+      "memory",
+      "staging",
+      "review",
+      "canonical"
+    ]
+  },
+  "counterexample_case_refs": [],
+  "created_at": "2026-05-07T00:00:00.000Z",
+  "last_seen_at": "2026-05-07T00:00:00.000Z",
+  "revision": 1,
+  "decision_history": []
+}

@@ -99,6 +99,7 @@ class TemporalLane extends RetrievalLane {
 
   async execute({ request, plan, now }) {
     const candidates = [];
+    const queryTokens = tokenize(request.query);
     const recencySensitive =
       plan.freshness_mode === "strict" ||
       /\brecent\b|\blatest\b|\bcurrent\b|\bnew\b|\btoday\b/.test(String(request.query).toLowerCase()) ||
@@ -113,12 +114,20 @@ class TemporalLane extends RetrievalLane {
         if (!isRetrievableRecord(layer, record)) {
           continue;
         }
+        const searchText = getSearchText(layer, record, {
+          catalogRoot: this.catalogs?.__catalogRoot,
+        });
+        const overlapScore = scoreTokenOverlap(queryTokens, tokenize(searchText));
+        if (overlapScore <= 0) {
+          continue;
+        }
         const timestamp = getPrimaryTimestamp(layer, record);
         if (!timestamp) {
           continue;
         }
 
-        const score = scoreTemporalRecency({ layer, timestamp, now, request });
+        const score = scoreTemporalRecency({ layer, timestamp, now, request })
+          * (0.5 + (0.5 * overlapScore));
         if (score <= 0) {
           continue;
         }
@@ -139,44 +148,12 @@ class TemporalLane extends RetrievalLane {
   }
 }
 
-class EvidencePriorityLane extends RetrievalLane {
-  constructor({ catalogs }) {
-    super({
-      laneId: "evidence-priority",
-      supportedLayers: ["evidence"],
-    });
-    this.catalogs = catalogs;
-  }
-
-  async execute({ plan }) {
-    if (!plan.allowed_layers.includes("evidence")) {
-      return [];
-    }
-
-    const candidates = [];
-    for (const record of this.catalogs.evidence ?? []) {
-      candidates.push(
-        makeCandidate({
-          layer: "evidence",
-          laneId: this.laneId,
-          score: plan.require_evidence ? 0.75 : 0.2,
-          record,
-          reason: plan.require_evidence ? "planner requires evidence" : "evidence lane fallback",
-        }),
-      );
-    }
-
-    return candidates;
-  }
-}
-
 function buildDefaultLanes({ catalogs, semanticBackend } = {}) {
   return [
     new LexicalLane({ catalogs }),
     new MetadataLane({ catalogs }),
     new SemanticLane({ catalogs, backend: semanticBackend ?? new HeuristicSemanticBackend({ catalogs }) }),
     new TemporalLane({ catalogs }),
-    new EvidencePriorityLane({ catalogs }),
   ];
 }
 

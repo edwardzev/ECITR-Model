@@ -129,7 +129,7 @@ test("weak-hit intervention succeeds without a support-graph snapshot", async ()
   assert.deepEqual(result.intervention.related_candidates, emptyResults());
 });
 
-test("graph-expanded intervention candidates must satisfy shared retrieval eligibility", async () => {
+test("graph-expanded intervention admits only candidates that satisfy shared retrieval eligibility", async () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-intervention-eligibility-"));
   const { catalogs, graphRoot } = buildWeakHitGraphCatalog({ rootDir });
   const runner = new RuntimeInterventionRunner({
@@ -149,7 +149,12 @@ test("graph-expanded intervention candidates must satisfy shared retrieval eligi
 
   assert.equal(result.intervention.weak_hit, true);
   assert.equal(result.intervention.summary.at(-1), "weak direct hit triggered support-graph expansion");
-  assert.deepEqual(result.intervention.related_candidates, emptyResults());
+  assert.deepEqual(result.intervention.related_candidates, {
+    tactics: [],
+    invariants: ["inv_scope_filter_before_rank_001"],
+    cases: [],
+    evidence: [],
+  });
 });
 
 test("stale support-graph snapshots disable intervention graph expansion", async () => {

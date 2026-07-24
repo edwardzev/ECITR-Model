@@ -27,9 +27,9 @@ It uses:
 
 This backend is intentionally simple and local.
 
-## Prototype Backend
+## Prototype Backends
 
-The first stronger prototype backend is `qdrant-hybrid-prototype-v1`.
+The first stronger prototype backend was `qdrant-hybrid-prototype-v1`.
 
 It is still a derived backend.
 
@@ -42,6 +42,30 @@ It:
 
 It does not:
 - replace the file-backed catalog
+- change retrieval request or response schemas
+- become canonical storage
+
+Qdrant is now treated as an optional comparison backend, not the default
+operational direction.
+
+The current local candidate backend is `lancedb-local-semantic-v1`.
+
+It:
+- consumes the shared contextual semantic export and writes LanceDB rows
+- stores dense vectors and primitive ECITR metadata in an embedded local table
+- overwrites the derived table from the catalog during sync
+- creates a full-text index over contextual text for later hybrid retrieval
+- returns metadata-filtered candidates to the semantic lane
+- refreshes as an independent autonomous stage after support-graph refresh,
+  including when a promotion benchmark blocks canonical promotion
+- backs project-memory semantic retrieval when the matching local table exists
+
+Alternate catalog roots receive isolated sibling support-graph, report, and
+LanceDB roots unless an operator explicitly supplies a derived-state location.
+
+It does not:
+- replace the file-backed catalog
+- require a long-running daemon
 - change retrieval request or response schemas
 - become canonical storage
 
@@ -64,6 +88,26 @@ Changing the semantic backend must not require changes to:
 
 The backend may evolve.
 The retrieval contract may not drift with it.
+
+## Shared Export
+
+Derived semantic backends must consume the shared contextual export projection in
+`src/retrieval/semantic-export.js`.
+
+The exporter owns:
+- retrievable-layer filtering
+- contextual text construction
+- workspace and project-scope metadata
+- deterministic derived document IDs
+- content hashes for derived index sync
+
+Backend-specific modules may transform that projection into engine-native
+documents, points, rows, or payloads. They must not redefine ECITR semantic text
+or eligibility rules independently.
+
+Vector-only candidates must carry backend-specific relevance qualification.
+Without a calibrated threshold, semantic-only candidates fail closed unless
+another retrieval lane independently corroborates the record.
 
 ## Current Recommendation
 

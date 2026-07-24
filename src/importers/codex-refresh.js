@@ -19,8 +19,9 @@ async function refreshCodexIndex({
   dryRun = false,
   includeSessions = true,
   includeArchived = true,
+  workspaceRoot = null,
   recreateCollection = false,
-  skipQdrantSync = false,
+  skipQdrantSync = true,
   embedderType = process.env.ECITR_EMBEDDER ?? "openai",
   embeddingModel = process.env.ECITR_EMBEDDING_MODEL,
   denseVectorSize,
@@ -54,6 +55,7 @@ async function refreshCodexIndex({
     collection_name: collectionName,
     include_sessions: includeSessions,
     include_archived: includeArchived,
+    workspace_root_filter: workspaceRoot ? path.resolve(workspaceRoot) : null,
     recreate_collection: recreateCollection,
     embedder_type: embedderType,
     embedding_model: embedderType === "openai" ? (embeddingModel ?? "text-embedding-3-small") : null,
@@ -65,6 +67,7 @@ async function refreshCodexIndex({
     dryRun,
     includeSessions,
     includeArchived,
+    workspaceRoot,
     validator,
   });
   assertImportSummaryClean(summary.rollouts);
@@ -138,7 +141,8 @@ function runStructuralCheck({ importSummary, catalogs }) {
     (importSummary.skipped_unchanged ?? 0) +
     (importSummary.skipped_checkpoint ?? 0) +
     (importSummary.skipped_duplicate_source ?? 0) +
-    (importSummary.skipped_no_visible_messages ?? 0);
+    (importSummary.skipped_no_visible_messages ?? 0) +
+    (importSummary.skipped_workspace_filter ?? 0);
 
   checks.push({
     name: "accounted_rollouts",

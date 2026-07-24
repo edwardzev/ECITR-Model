@@ -85,8 +85,11 @@ class FileBackedCatalog {
     const filePath = this.getRecordPath(recordType, recordId);
 
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    if (fs.existsSync(filePath) && !overwrite) {
-      throw new Error(`Record already exists: ${recordType}:${recordId}`);
+    if (fs.existsSync(filePath) && (recordType === "evidence" || !overwrite)) {
+      const suffix = recordType === "evidence"
+        ? "; evidence is immutable and corrections require a new evidence_id"
+        : "";
+      throw new Error(`Record already exists: ${recordType}:${recordId}${suffix}`);
     }
 
     fs.writeFileSync(filePath, `${JSON.stringify(record, null, 2)}\n`, "utf8");

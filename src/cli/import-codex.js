@@ -18,6 +18,7 @@ function parseArgs(args) {
     dryRun: false,
     includeSessions: true,
     includeArchived: true,
+    workspaceRoot: null,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -31,6 +32,9 @@ function parseArgs(args) {
         break;
       case "--dry-run":
         options.dryRun = true;
+        break;
+      case "--workspace-root":
+        options.workspaceRoot = args[++index];
         break;
       case "--skip-sessions":
         options.includeSessions = false;

@@ -8,7 +8,8 @@ const { FileBackedCatalog } = require("../src/storage/file-backed-catalog");
 const { TacticReviewSurface } = require("../src/tactics/review");
 const { loadExample } = require("./helpers/load-example");
 
-test("tactic review promotes a supported discovery candidate into canonical state", () => {
+test("tactic review promotes a supported discovery candidate into canonical state", (t) => {
+  useFixedClock(t);
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-tactic-review-"));
 
   try {
@@ -95,7 +96,8 @@ test("tactic review promotes a supported discovery candidate into canonical stat
   }
 });
 
-test("tactic review blocks candidates that fail discovery readiness", () => {
+test("tactic review blocks candidates that fail discovery readiness", (t) => {
+  useFixedClock(t);
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-tactic-review-"));
 
   try {
@@ -165,6 +167,126 @@ test("tactic review blocks candidates that fail discovery readiness", () => {
   }
 });
 
+test("tactic review revalidates an active supported tactic through an immutable audit packet", () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-tactic-revalidation-"));
+
+  try {
+    const catalog = new FileBackedCatalog({ rootDir });
+    const evidence = buildEvidence("ev_tactic_revalidation_001");
+    const sourceCase = buildCase({
+      caseId: "case_tactic_revalidation_001",
+      evidenceRef: evidence.evidence_id,
+      problem: "Active tactics need explicit support-aware revalidation.",
+      action: "Validated source lifecycle, evidence, environment, and tool bounds before extending freshness.",
+      outcome: "The tactic remains usable with an auditable revalidation boundary.",
+      failure: "Blindly moving revalidation dates would bypass semantic review.",
+      applyWhen: ["An active tactic reaches its revalidation boundary"],
+      doNotApply: ["Any source support is missing, inactive, or invalid"],
+    });
+    const invariant = buildInvariant({
+      invariantId: "inv_tactic_revalidation_001",
+      evidenceRefs: [evidence.evidence_id],
+      title: "Tactic freshness must remain support-backed",
+      summary: "Revalidation should prove current support instead of only changing a timestamp.",
+      statement: "An active tactic may be revalidated only while its source cases, invariants, and evidence remain valid.",
+      whyStable: "The authority chain must remain intact across freshness boundaries.",
+      scope: ["tactic freshness"],
+      applicability: ["An active tactic is due for revalidation"],
+      nonApplicability: ["The tactic is already deprecated or invalidated"],
+      breakers: ["A supporting record is missing or inactive"],
+    });
+    const tactic = buildTactic({
+      tacticId: "tac_tactic_revalidation_001",
+      caseRefs: [sourceCase.case_id],
+      invariantRefs: [invariant.id],
+      evidenceRefs: [evidence.evidence_id],
+    });
+
+    catalog.writeRecord("evidence", evidence);
+    catalog.writeRecord("case", sourceCase);
+    catalog.writeRecord("invariant", invariant);
+    catalog.writeRecord("tactic", tactic);
+
+    const surface = new TacticReviewSurface({ catalogRoot: rootDir });
+    const result = surface.revalidateTactic({
+      tacticId: tactic.id,
+      reviewer: "governance-and-qa-steward",
+      rationale: "Current source support and the focused runtime contract remain valid.",
+      reviewedAt: "2026-07-17T12:00:00.000Z",
+      revalidateAt: "2026-09-15T12:00:00.000Z",
+      validatedOn: ["focused runtime regression", "environment and tool-bound review"],
+    });
+
+    assert.equal(result.next_record.revalidate_at, "2026-09-15T12:00:00.000Z");
+    assert.deepEqual(result.packet_write.packet.checks, {
+      source_cases_active: true,
+      source_cases_lifecycle_valid: true,
+      supporting_invariants_active: true,
+      evidence_resolvable: true,
+      invalidation_markers_clear: true,
+      environment_bounds_reviewed: true,
+      tool_version_bounds_reviewed: true,
+    });
+    assert.equal(surface.inspectTactic(tactic.id).revalidations.length, 1);
+    assert.equal(catalog.getRecord("tactic", tactic.id).updated_at, "2026-07-17T12:00:00.000Z");
+  } finally {
+    fs.rmSync(rootDir, { recursive: true, force: true });
+  }
+});
+
+test("tactic review blocks unsupported revalidation and can deprecate the stale tactic", () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-tactic-revalidation-"));
+
+  try {
+    const catalog = new FileBackedCatalog({ rootDir });
+    const evidence = buildEvidence("ev_tactic_revalidation_blocked_001");
+    const sourceCase = buildCase({
+      caseId: "case_tactic_revalidation_blocked_001",
+      evidenceRef: evidence.evidence_id,
+      problem: "A supporting case is no longer active.",
+      action: "Deprecated the source case through review.",
+      outcome: "Unsupported guidance is no longer eligible for revalidation.",
+      failure: "Leaving the tactic active would conceal broken support.",
+      applyWhen: ["A tactic cites this retired source"],
+      doNotApply: ["The source case remains active"],
+    });
+    sourceCase.status = "deprecated";
+    const tactic = buildTactic({
+      tacticId: "tac_tactic_revalidation_blocked_001",
+      caseRefs: [sourceCase.case_id],
+      invariantRefs: [],
+      evidenceRefs: [evidence.evidence_id],
+    });
+
+    catalog.writeRecord("evidence", evidence);
+    catalog.writeRecord("case", sourceCase);
+    catalog.writeRecord("tactic", tactic);
+
+    const surface = new TacticReviewSurface({ catalogRoot: rootDir });
+    assert.throws(() => surface.revalidateTactic({
+      tacticId: tactic.id,
+      reviewer: "governance-and-qa-steward",
+      rationale: "This must fail because its only source is retired.",
+      reviewedAt: "2026-07-17T12:00:00.000Z",
+      revalidateAt: "2026-09-15T12:00:00.000Z",
+      validatedOn: ["support lifecycle audit"],
+    }), /source case is not active/);
+
+    const result = surface.applyDecision({
+      tacticId: tactic.id,
+      decision: "deprecate",
+      reviewer: "governance-and-qa-steward",
+      rationale: "The only source case is deprecated, so the tactic no longer has active support.",
+      reviewedAt: "2026-07-17T12:05:00.000Z",
+    });
+    assert.equal(result.next_record.status, "deprecated");
+    assert.equal(catalog.getRecord("tactic", tactic.id).status, "deprecated");
+    assert.equal(catalog.getRecord("review_audit_entry", result.audit_write.recordId).decision, "deprecate");
+  } finally {
+    fs.rmSync(rootDir, { recursive: true, force: true });
+  }
+});
+
 function buildCase({ caseId, evidenceRef, problem, action, outcome, failure, applyWhen, doNotApply }) {
   const record = structuredClone(loadExample("case"));
   record.case_id = caseId;
@@ -185,6 +307,26 @@ function buildCase({ caseId, evidenceRef, problem, action, outcome, failure, app
   return record;
 }
 
+function buildEvidence(evidenceId) {
+  const record = structuredClone(loadExample("evidence"));
+  record.evidence_id = evidenceId;
+  record.source_locator = `test://${evidenceId}`;
+  return record;
+}
+
+function buildTactic({ tacticId, caseRefs, invariantRefs, evidenceRefs }) {
+  const record = structuredClone(loadExample("tactic"));
+  record.id = tacticId;
+  record.series_key = tacticId;
+  record.status = "active";
+  record.source_case_refs = caseRefs;
+  record.supporting_invariant_refs = invariantRefs;
+  record.evidence_refs = evidenceRefs;
+  record.revalidate_at = "2026-07-01T00:00:00.000Z";
+  delete record.expiry_at;
+  return record;
+}
+
 function buildInvariant({ invariantId, evidenceRefs, title, summary, statement, whyStable, scope, applicability, nonApplicability, breakers }) {
   const record = structuredClone(loadExample("invariant"));
   record.id = invariantId;
@@ -198,4 +340,11 @@ function buildInvariant({ invariantId, evidenceRefs, title, summary, statement, 
   record.non_applicability_conditions = nonApplicability;
   record.known_breakers = breakers;
   return record;
+}
+
+function useFixedClock(t) {
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-05-01T00:00:00.000Z"),
+  });
 }

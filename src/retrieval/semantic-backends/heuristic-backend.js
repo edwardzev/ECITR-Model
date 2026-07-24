@@ -37,6 +37,7 @@ class HeuristicSemanticBackend extends SemanticRetrievalBackend {
           score: score * 0.9,
           record,
           reason: "semantic overlap",
+          semanticQualified: true,
         }));
       }
     }
@@ -45,7 +46,14 @@ class HeuristicSemanticBackend extends SemanticRetrievalBackend {
   }
 }
 
-function makeCandidate({ layer, laneId, score, record, reason }) {
+function makeCandidate({
+  layer,
+  laneId,
+  score,
+  record,
+  reason,
+  semanticQualified = false,
+}) {
   return {
     recordId: getRecordId(layer, record),
     layer,
@@ -53,6 +61,7 @@ function makeCandidate({ layer, laneId, score, record, reason }) {
     score,
     record,
     reasons: [reason],
+    semanticQualified,
   };
 }
 
@@ -131,7 +140,8 @@ function scoreSoftOverlap(queryTokens, haystackTokens) {
 
   let matches = 0;
   for (const token of queryTokens) {
-    if (haystackTokens.some((candidate) => candidate === token || candidate.startsWith(token) || token.startsWith(candidate))) {
+    const normalizedToken = String(token);
+    if (haystackTokens.some((candidate) => String(candidate) === normalizedToken)) {
       matches += 1;
     }
   }

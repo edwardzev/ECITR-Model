@@ -18,6 +18,7 @@ function projectEvidence(records) {
   return [...records]
     .map((record) => ({
       evidence_id: record.evidence_id,
+      workspace_id: record.workspace_id ?? null,
       project_scope: record.project_scope ?? "global",
       parent_evidence_id: record.parent_evidence_id ?? null,
       correction_of: record.correction_of ?? null,
@@ -30,6 +31,7 @@ function projectCases(records) {
   return [...records]
     .map((record) => ({
       case_id: record.case_id,
+      workspace_id: record.workspace_id ?? null,
       status: record.status ?? null,
       review_state: record.review_state ?? null,
       project_scope: record.context?.project_scope ?? "global",
@@ -45,6 +47,7 @@ function projectInvariants(records) {
   return [...records]
     .map((record) => ({
       id: record.id,
+      workspace_id: record.workspace_id ?? null,
       status: record.status ?? null,
       source_case_refs: sortStrings(record.source_case_refs),
       evidence_refs: sortStrings(record.evidence_refs),
@@ -57,6 +60,7 @@ function projectTactics(records) {
   return [...records]
     .map((record) => ({
       id: record.id,
+      workspace_id: record.workspace_id ?? null,
       status: record.status ?? null,
       source_case_refs: sortStrings(record.source_case_refs),
       supporting_invariant_refs: sortStrings(record.supporting_invariant_refs),
@@ -83,6 +87,7 @@ function projectParameterDefinitions(records) {
   return [...records]
     .map((record) => ({
       definition_id: record.definition_id,
+      workspace_id: record.workspace_id ?? null,
       observed_key: record.observed_key,
       normalized_key: record.normalized_key,
       first_source_evidence_ref: record.first_source_evidence_ref ?? null,
@@ -94,6 +99,7 @@ function projectParameterObservations(records) {
   return [...records]
     .map((record) => ({
       observation_id: record.observation_id,
+      workspace_id: record.workspace_id ?? null,
       definition_id: record.definition_id,
       project_scope: record.project_scope ?? "global",
       source_evidence_refs: sortStrings(record.source_evidence_refs),

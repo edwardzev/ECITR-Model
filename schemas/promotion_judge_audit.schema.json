@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_type",
+    "audit_id",
+    "candidate_id",
+    "layer",
+    "judge_mode",
+    "provider",
+    "model",
+    "status",
+    "decision",
+    "request_hash",
+    "response_hash",
+    "candidate_hash",
+    "deterministic_hash",
+    "request",
+    "response",
+    "error",
+    "created_at"
+  ],
+  "properties": {
+    "artifact_type": { "type": "string", "const": "promotion_judge_audit" },
+    "audit_id": { "type": "string", "pattern": "^pja_[A-Za-z0-9_-]+$" },
+    "candidate_id": { "type": "string", "pattern": "^(lic|ltc)_[A-Za-z0-9_-]+$" },
+    "layer": { "type": "string", "enum": ["invariant", "tactic"] },
+    "judge_mode": { "type": "string", "minLength": 1 },
+    "provider": { "type": "string", "minLength": 1 },
+    "model": { "type": "string", "minLength": 1 },
+    "status": {
+      "type": "string",
+      "enum": ["completed", "unavailable", "invalid_response", "error"]
+    },
+    "decision": {
+      "type": ["string", "null"],
+      "enum": ["activate", "narrow", "retire", "unavailable", null]
+    },
+    "request_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "response_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "candidate_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "deterministic_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "request": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "response": {
+      "type": ["object", "null"],
+      "additionalProperties": true
+    },
+    "error": {
+      "type": ["string", "null"]
+    },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

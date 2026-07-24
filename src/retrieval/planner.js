@@ -69,6 +69,7 @@ class RetrievalPlanner {
 
     return {
       request_id: request.request_id,
+      workspace_id: request.workspace_id ?? null,
       intent: request.intent,
       project_scope: request.project_scope,
       allowed_layers: allowedLayers,

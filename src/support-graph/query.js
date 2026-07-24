@@ -27,6 +27,7 @@ function listNeighbors({
   nodeId,
   direction = "both",
   projectScope = null,
+  workspaceId = null,
   nodeTypes = null,
   limit = 20,
 } = {}) {
@@ -50,6 +51,9 @@ function listNeighbors({
       continue;
     }
     if (!matchesScope(projectScope, neighbor.project_scope) || !matchesScope(projectScope, edge.project_scope)) {
+      continue;
+    }
+    if (!matchesWorkspace(workspaceId, neighbor.workspace_id)) {
       continue;
     }
     if (Array.isArray(nodeTypes) && nodeTypes.length > 0 && !nodeTypes.includes(neighbor.node_type)) {
@@ -76,6 +80,7 @@ function findShortestPath({
   from,
   to,
   projectScope = null,
+  workspaceId = null,
   maxDepth = 6,
 } = {}) {
   const fromNodeId = resolveNodeId(snapshot, from);
@@ -107,7 +112,12 @@ function findShortestPath({
 
       const nextNodeId = edge.from === current.nodeId ? edge.to : edge.from;
       const nextNode = nodeIndex.get(nextNodeId);
-      if (!nextNode || !matchesScope(projectScope, nextNode.project_scope) || visited.has(nextNodeId)) {
+      if (
+        !nextNode
+        || !matchesScope(projectScope, nextNode.project_scope)
+        || !matchesWorkspace(workspaceId, nextNode.workspace_id)
+        || visited.has(nextNodeId)
+      ) {
         continue;
       }
 
@@ -132,6 +142,7 @@ function expandRelated({
   snapshot,
   nodeId,
   projectScope = null,
+  workspaceId = null,
   maxDepth = 2,
   limit = 10,
   canonicalOnly = true,
@@ -157,7 +168,11 @@ function expandRelated({
 
       const nextNodeId = edge.from === current.nodeId ? edge.to : edge.from;
       const nextNode = nodeIndex.get(nextNodeId);
-      if (!nextNode || !matchesScope(projectScope, nextNode.project_scope)) {
+      if (
+        !nextNode
+        || !matchesScope(projectScope, nextNode.project_scope)
+        || !matchesWorkspace(workspaceId, nextNode.workspace_id)
+      ) {
         continue;
       }
 
@@ -279,6 +294,14 @@ function matchesScope(requestedScope, value) {
   }
 
   return value === "global" || value === requestedScope;
+}
+
+function matchesWorkspace(requestedWorkspaceId, value) {
+  if (!requestedWorkspaceId) {
+    return true;
+  }
+
+  return value === requestedWorkspaceId;
 }
 
 module.exports = {

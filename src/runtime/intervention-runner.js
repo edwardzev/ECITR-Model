@@ -176,6 +176,10 @@ function validateIntervention(intervention) {
     project_scope: projectScope,
   };
 
+  if (intervention.workspace_id != null && intervention.workspace_id !== "") {
+    normalized.workspace_id = String(intervention.workspace_id).trim();
+  }
+
   if (mode === "failure_retry") {
     const failureKind = String(intervention.failure_kind ?? "");
     if (!FAILURE_KINDS.has(failureKind)) {
@@ -199,6 +203,7 @@ function buildInterventionRetrievalRequest({ intervention, now = new Date() }) {
   return {
     request_id: `req_intervention_${intervention.mode}_${requestTimestamp}_${requestHash}`,
     query: composeInterventionQuery(intervention),
+    ...(intervention.workspace_id ? { workspace_id: intervention.workspace_id } : {}),
     project_scope: intervention.project_scope,
     intent: profile.intent,
     allowed_layers: ["tactics", "invariants", "cases", "evidence"],
@@ -276,6 +281,7 @@ function expandGraphCandidates({ graphRoot, profile, selectedResults, catalogs, 
       snapshot,
       nodeId: seedId,
       projectScope,
+      workspaceId: request.workspace_id ?? null,
       maxDepth: 2,
       limit: GRAPH_EXPANSION_RESULT_LIMIT,
       canonicalOnly: true,
@@ -350,6 +356,7 @@ function buildMetrics({
   graphExpansionLatencyMs,
 }) {
   const conflicts = retrieval?.response?.conflicts ?? [];
+  const exclusionCounts = retrieval?.diagnostics?.fusion?.excluded_by_code ?? {};
 
   return {
     hit: countGroupedResults(selectedResults) > 0,
@@ -359,8 +366,11 @@ function buildMetrics({
     retrieval_latency_ms: retrievalLatencyMs,
     graph_expansion_latency_ms: graphExpansionLatencyMs,
     latency_ms: retrievalLatencyMs + graphExpansionLatencyMs,
-    wrong_scope_leak_count: conflicts.filter((message) => /scope .* conflicts with request/.test(message)).length,
-    stale_guidance_exclusion_count: conflicts.filter((message) => /^excluded tactic .*:/.test(message)).length,
+    wrong_scope_leak_count:
+      (exclusionCounts.scope_conflict ?? 0)
+      + (exclusionCounts.workspace_conflict ?? 0),
+    stale_guidance_exclusion_count: exclusionCounts.tactic_unusable
+      ?? conflicts.filter((message) => /^excluded tactic .*:/.test(message)).length,
   };
 }
 

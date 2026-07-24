@@ -26,6 +26,10 @@
   ],
   "properties": {
     "id": { "type": "string", "pattern": "^inv_[A-Za-z0-9_-]+$" },
+    "workspace_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+    },
     "series_key": { "type": "string", "minLength": 1 },
     "layer": { "type": "string", "const": "invariant" },
     "status": { "type": "string", "enum": ["draft", "active", "superseded", "deprecated", "rejected"] },

@@ -12,6 +12,7 @@ test("tactic promotion compiles a draft tactic from a staging packet", () => {
 
   assert.equal(draft.status, "draft");
   assert.equal(draft.id, packet.proposed_tactic_id);
+  assert.equal(draft.workspace_id, "ecitr_model");
   assert.deepEqual(draft.parameter_observation_refs, packet.parameter_observation_refs);
 });
 
@@ -22,14 +23,18 @@ test("tactic activation rejects already stale tactics", () => {
   delete packet.revalidate_at;
 
   const draft = pipeline.compileDraft(packet);
-  assert.throws(() => pipeline.activateDraft(draft));
+  assert.throws(() => pipeline.activateDraft(draft, {
+    now: new Date("2026-05-01T00:00:00.000Z"),
+  }));
 });
 
 test("fresh tactic draft activates successfully", () => {
   const pipeline = new TacticPromotionPipeline();
   const packet = loadExample("tactic_promotion_packet");
   const draft = pipeline.compileDraft(packet);
-  const active = pipeline.activateDraft(draft);
+  const active = pipeline.activateDraft(draft, {
+    now: new Date("2026-05-01T00:00:00.000Z"),
+  });
 
   assert.equal(active.status, "active");
 });

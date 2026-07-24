@@ -38,11 +38,25 @@ Support-graph artifacts live outside the canonical storage catalog under:
 - `.local/support-graph/snapshots/`
 - `.local/support-graph/diffs/`
 - `.local/support-graph/latest.json`
+- `.local/support-graph/latest-manifest.json`
 - `.local/support-graph/latest-diff.json`
 
 These files are derived artifacts, not canonical records.
 
 Each snapshot also carries an internal `basis_hash` derived from graph-relevant runtime catalog fields so downstream consumers can prove the snapshot still matches the current catalog state before using it.
+
+`latest-manifest.json` exposes the current build id, basis hash, counts, and
+snapshot path without requiring retrieval to parse the full graph before it can
+reject a stale snapshot. Fresh snapshots are cached in process.
+
+Generated retention defaults:
+- 14 full snapshots
+- 90 graph diffs
+
+The latest manifest always points to a retained snapshot. Retention applies only
+to derived graph files; it does not delete canonical records or review history.
+
+Snapshots also preserve per-node workspace identity so graph queries and explanation enrichment can remain subordinate to workspace-scoped retrieval instead of reintroducing cross-workspace leakage.
 
 ## Node Scope
 
@@ -102,6 +116,7 @@ These tools:
 - operate over the derived graph snapshot
 - remain record-addressed and explicit
 - do not replace the public retrieval API
+- must honor both project scope and workspace identity when those constraints are provided
 - must fail closed when snapshot freshness cannot be proven against the current runtime catalogs
 
 ## Diff Model
@@ -129,6 +144,20 @@ The support graph is refreshed after:
 It runs before downstream semantic sync so any retrieval enrichment can consume the latest derived graph if needed later.
 
 Current retrieval use is explanation-only after fusion. The graph may add explanation lines for already-selected winners, but it does not change result selection or ordering in this wave.
+
+Graph construction uses the full correction lineage. Retrieval filters
+superseded evidence for selection, but freshness compares against the same full
+structural catalog view used to build the graph.
+
+Declared support edges to superseded evidence remain in the graph for audit.
+When a correction leaf exists, graph construction also adds an `EXTRACTED`
+current-evidence edge. Explanation enrichment suppresses superseded evidence and
+parameter observations whose source evidence is no longer current, so historical
+lineage cannot masquerade as current support.
+
+Generated graph JSON is written atomically. The latest manifest target and latest
+diff artifact are protected during retention; the default bound is `14` snapshots
+and `90` self-contained diffs. Runtime snapshot caching is capped at two entries.
 
 ## Non-Goals
 

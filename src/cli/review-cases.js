@@ -18,6 +18,7 @@ function main() {
       limit: options.limit,
       reviewState: options.reviewState,
       status: options.status,
+      workspaceId: options.workspaceId,
     }), null, 2)}\n`);
     return;
   }
@@ -79,8 +80,9 @@ function main() {
       limit: options.limit,
       status: options.status,
       reviewState: options.reviewState,
+      workspaceId: options.workspaceId,
       batchLogDir: options.batchLogDir,
-      skipPreviouslyBlocked: options.skipPreviouslyBlocked,
+      skipPreviouslyFailed: options.skipPreviouslyFailed,
       dryRun: options.dryRun,
     }), null, 2)}\n`);
     return;
@@ -95,6 +97,7 @@ function parseArgs(args) {
     limit: 25,
     status: "draft",
     reviewState: undefined,
+    workspaceId: undefined,
     caseId: undefined,
     decision: undefined,
     reviewer: undefined,
@@ -106,7 +109,7 @@ function parseArgs(args) {
     strategyId: "bounded-case-completion-template-v1",
     baseCaseVersion: undefined,
     batchLogDir: DEFAULT_BATCH_LOG_DIR,
-    skipPreviouslyBlocked: true,
+    skipPreviouslyFailed: true,
     patch: undefined,
     dryRun: false,
   };
@@ -134,6 +137,9 @@ function parseArgs(args) {
         break;
       case "--review-state":
         options.reviewState = args[++index];
+        break;
+      case "--workspace-id":
+        options.workspaceId = args[++index];
         break;
       case "--case-id":
         options.caseId = args[++index];
@@ -171,8 +177,8 @@ function parseArgs(args) {
       case "--batch-log-dir":
         options.batchLogDir = path.resolve(args[++index]);
         break;
-      case "--include-previously-blocked":
-        options.skipPreviouslyBlocked = false;
+      case "--include-previously-failed":
+        options.skipPreviouslyFailed = false;
         break;
       case "--dry-run":
         options.dryRun = true;

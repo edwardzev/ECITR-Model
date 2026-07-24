@@ -12,6 +12,9 @@ function main() {
     catalogRoot: options.catalogRoot,
   });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if ((result.mismatches_expected ?? 0) > 0) {
+    process.exitCode = 1;
+  }
 }
 
 function parseArgs(args) {

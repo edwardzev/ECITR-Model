@@ -31,6 +31,46 @@ Rules:
 - intervention execution still returns normal retrieval output plus a smaller intervention envelope
 - intervention artifacts remain derived `.local` files rather than catalog records
 
+## Workspace Memory Surface
+
+Workspaces may now declare an ECITR memory surface through a root `ecitr.project.json` marker.
+
+The marker declares:
+- workspace identity
+- catalog location
+- default project scope
+- whether preflight retrieval is mandatory
+- whether failure-retry retrieval is mandatory
+
+Current phase rule:
+- the memory surface is visible by default when the marker exists
+- normal task execution does not force retrieval when both mandatory flags are false
+- the execution loop exposes a first-class discretionary affordance through `search_project_memory`
+- usage can be recorded later through `record_memory_usage`
+
+Repo-local or harness integrations can use the concrete CLI surfaces:
+- `npm run memory:log-opportunity -- --task-id ... --task-title ...`
+- `npm run search:project-memory -- --query ... --trigger discretionary|preflight|failure_retry`
+- `npm run memory:record-usage -- --invocation-id ... --used-record-ids ...`
+- `npm run memory:report-invocations`
+
+When invoked from a marked repository, these commands resolve
+`ecitr.project.json` from the current working directory. `--workspace-root`,
+`--workspace-id`, and `--artifact-root` remain available as explicit overrides.
+
+The report exposes the experiment denominator (`task_opportunities`),
+consultation rate, trigger mix, returned layer counts, usage-callback rate, and
+confirmed memory-use rate.
+
+The execution loop should expose:
+- whether project memory is available
+- the named tool affordance
+- the workspace identity that retrieval will use
+- the default scope and policy flags
+- a per-run memory invocation artifact summary
+
+Memory invocation artifacts remain derived `.local` files rather than canonical records.
+
 ## Role Rule
 
 Every routed task must name:

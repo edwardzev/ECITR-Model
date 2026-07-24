@@ -18,6 +18,10 @@
   ],
   "properties": {
     "evidence_id": { "type": "string", "minLength": 1, "pattern": "^ev_[A-Za-z0-9_-]+$" },
+    "workspace_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+    },
     "substrate_ref": { "type": "string", "minLength": 1 },
     "source_type": { "type": "string", "enum": ["chat", "file", "log", "diff", "web", "test", "other"] },
     "source_locator": { "type": "string", "minLength": 1 },

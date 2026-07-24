@@ -2,6 +2,7 @@
   "promotion_id": "ipp_scope_filter_before_rank_001",
   "promotion_basis": "human_approved_single_case",
   "proposed_invariant_id": "inv_scope_filter_before_rank_001",
+  "workspace_id": "ecitr_model",
   "version": 1,
   "series_key": "retrieval.scope-filter-before-rank",
   "title": "Scope boundaries must be enforced before ranking",

@@ -1,6 +1,7 @@
 {
   "case_id": "case_retrieval_scope_drift_001",
   "case_version": 1,
+  "workspace_id": "ecitr_model",
   "status": "active",
   "problem_statement": "A retrieval prototype returned tactics from unrelated projects because scope filtering was applied after ranking instead of before candidate acceptance.",
   "context": {
@@ -33,7 +34,7 @@
     "ev_mem_20260410_001"
   ],
   "parameter_observation_refs": [
-    "paramobs_ecitr_qdrant_url_ev_mem_20260410_001"
+    "paramobs_01041f2d5c6ded7a1520"
   ],
   "authoring_agent": "case-steward",
   "review_state": "approved",

@@ -6,6 +6,7 @@ const { InvariantPromotionPipeline } = require("./promotion");
 const { ReviewWorkflow } = require("../review/workflow");
 const { FileBackedCatalog } = require("../storage/file-backed-catalog");
 const { EcitrValidator } = require("../validation/validator");
+const { mergeWorkspaceIds } = require("../workspace/identity");
 
 class InvariantDiscoverySurface {
   constructor({
@@ -48,6 +49,10 @@ class InvariantDiscoverySurface {
     }
 
     const sourceCases = caseInspection.map((item) => item.record);
+    const workspaceId = mergeWorkspaceIds(...sourceCases.map((record) => record.workspace_id));
+    if (!workspaceId || workspaceId === "mixed") {
+      throw new Error("invariant discovery requires all source cases to share one workspace_id");
+    }
     const promotionBasis = entry.promotion_basis ?? "multi_case";
     const title = String(entry.title ?? "").trim();
     const summary = String(entry.summary ?? "").trim();
@@ -57,6 +62,7 @@ class InvariantDiscoverySurface {
 
     const packet = {
       promotion_id: promotionId,
+      workspace_id: entry.workspace_id ?? workspaceId,
       promotion_basis: promotionBasis,
       proposed_invariant_id: entry.proposed_invariant_id ?? createInvariantId(promotionId),
       version: entry.version ?? 1,

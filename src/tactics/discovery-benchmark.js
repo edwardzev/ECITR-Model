@@ -18,7 +18,11 @@ function runTacticDiscoveryBenchmark({
 } = {}) {
   const resolvedManifestPath = path.resolve(manifestPath);
   const manifest = JSON.parse(fs.readFileSync(resolvedManifestPath, "utf8"));
-  const surface = new TacticDiscoverySurface({ catalogRoot });
+  const evaluationAt = manifest.evaluation_at ?? null;
+  const surface = new TacticDiscoverySurface({
+    catalogRoot,
+    ...(evaluationAt ? { now: () => evaluationAt } : {}),
+  });
 
   const results = manifest.entries.map((entry) => evaluateBenchmarkEntry(surface, entry));
   const matches = results.filter((entry) => entry.matches_expected).length;
@@ -27,6 +31,7 @@ function runTacticDiscoveryBenchmark({
   return {
     benchmark_id: manifest.benchmark_id ?? path.basename(resolvedManifestPath, ".json"),
     description: manifest.description ?? null,
+    evaluation_at: evaluationAt,
     manifest_path: resolvedManifestPath,
     total_entries: results.length,
     matches_expected: matches,

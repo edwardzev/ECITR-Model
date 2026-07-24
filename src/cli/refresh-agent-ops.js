@@ -24,6 +24,7 @@ function parseArgs(args) {
     collectionName: process.env.ECITR_QDRANT_COLLECTION ?? DEFAULT_COLLECTION_NAME,
     projectId: null,
     dryRun: false,
+    skipQdrantSync: true,
     skipSmokeCheck: false,
     recreateCollection: false,
     embedderType: process.env.ECITR_EMBEDDER ?? "openai",
@@ -75,6 +76,12 @@ function parseArgs(args) {
         break;
       case "--dry-run":
         options.dryRun = true;
+        break;
+      case "--skip-qdrant-sync":
+        options.skipQdrantSync = true;
+        break;
+      case "--sync-qdrant":
+        options.skipQdrantSync = false;
         break;
       case "--skip-smoke-check":
         options.skipSmokeCheck = true;

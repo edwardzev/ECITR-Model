@@ -4,6 +4,7 @@ const { FilePayloadStore, createSha256 } = require("./file-payload-store");
 const { assertLifecycleRecord } = require("../lifecycle/rules");
 const { FileBackedCatalog } = require("../storage/file-backed-catalog");
 const { EcitrValidator } = require("../validation/validator");
+const { resolveWorkspaceId } = require("../workspace/config");
 
 const PAYLOAD_NAMESPACE_SEGMENTS = Object.freeze(["ecitr", "conversations"]);
 const SOURCE_LOCATOR_PREFIX = "codex-thread://";
@@ -16,6 +17,7 @@ function captureConversationSnapshot({
   messages,
   capturedAt = new Date().toISOString(),
   projectScope = "project",
+  workspaceId = resolveWorkspaceId({ catalogRoot }),
   sourceLocator = null,
   redactionState = "none",
   validator = new EcitrValidator(),
@@ -56,6 +58,7 @@ function captureConversationSnapshot({
   });
   const record = {
     evidence_id: evidenceId,
+    ...(workspaceId ? { workspace_id: workspaceId } : {}),
     substrate_ref: `${SUBSTRATE_REF_PREFIX}${normalizedConversationKey}/snapshot/${evidenceId}`,
     source_type: "chat",
     source_locator: resolvedSourceLocator,

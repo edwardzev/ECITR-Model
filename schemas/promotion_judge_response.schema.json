@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision", "rationale", "narrowed_entry"],
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": ["activate", "narrow", "retire"]
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "narrowed_entry": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": { "type": "string", "minLength": 1 },
+            "summary": { "type": "string", "minLength": 1 },
+            "statement": { "type": "string", "minLength": 1 },
+            "action": { "type": "string", "minLength": 1 },
+            "why_it_is_stable": { "type": "string", "minLength": 1 },
+            "scope": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "non_scope": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "applicability_conditions": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "non_applicability_conditions": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "known_breakers": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "prerequisites": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "steps": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "fallbacks": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "rollback": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "environment_bounds": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

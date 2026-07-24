@@ -728,6 +728,7 @@ function createEntry({
   }
 
   return {
+    workspace_id: evidenceRecord.workspace_id ?? null,
     parameter_key: observedKey,
     raw_value_text: formatRawValueText(value),
     value_type: inferValueType(value),

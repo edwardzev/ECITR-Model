@@ -22,6 +22,10 @@
   ],
   "properties": {
     "promotion_id": { "type": "string", "pattern": "^ipp_[A-Za-z0-9_-]+$" },
+    "workspace_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+    },
     "promotion_basis": { "type": "string", "enum": ["multi_case", "human_approved_single_case"] },
     "proposed_invariant_id": { "type": "string", "pattern": "^inv_[A-Za-z0-9_-]+$" },
     "version": { "type": "integer", "minimum": 1 },

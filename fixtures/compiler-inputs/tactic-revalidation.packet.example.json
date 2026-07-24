@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "revalidation_id": "reval_tac_runtime_guard_001_20260717T120000Z",
+  "tactic_id": "tac_runtime_guard_001",
+  "previous_revalidate_at": "2026-07-01T00:00:00.000Z",
+  "next_revalidate_at": "2026-09-15T00:00:00.000Z",
+  "source_case_refs": [
+    "case_runtime_guard_001"
+  ],
+  "supporting_invariant_refs": [
+    "inv_runtime_guard_001"
+  ],
+  "evidence_refs": [
+    "ev_runtime_guard_001"
+  ],
+  "checks": {
+    "source_cases_active": true,
+    "source_cases_lifecycle_valid": true,
+    "supporting_invariants_active": true,
+    "evidence_resolvable": true,
+    "invalidation_markers_clear": true,
+    "environment_bounds_reviewed": true,
+    "tool_version_bounds_reviewed": true
+  },
+  "validated_on": [
+    "focused runtime regression",
+    "full repository check"
+  ],
+  "reviewer": "governance-and-qa-steward",
+  "rationale": "Current support records, environment bounds, and runtime checks still support this tactic.",
+  "reviewed_at": "2026-07-17T12:00:00.000Z",
+  "previous_record_snapshot_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "resulting_record_snapshot_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}

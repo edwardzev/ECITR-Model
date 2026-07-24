@@ -8,6 +8,11 @@ const { REPO_ROOT } = require("../validation/schema-registry");
 const DEFAULT_LABEL = "com.ecitr.autonomous-refresh";
 const DEFAULT_HOUR = 4;
 const DEFAULT_MINUTE = 15;
+const DEFAULT_LOG_MAX_BYTES = 5 * 1024 * 1024;
+const DEFAULT_LOG_RETENTION = 5;
+const DEFAULT_ENVIRONMENT_VARIABLES = {
+  ECITR_PROMOTION_JUDGE: "local",
+};
 
 function buildLaunchdPlan({
   repoRoot = REPO_ROOT,
@@ -15,6 +20,7 @@ function buildLaunchdPlan({
   label = DEFAULT_LABEL,
   hour = DEFAULT_HOUR,
   minute = DEFAULT_MINUTE,
+  environmentVariables = DEFAULT_ENVIRONMENT_VARIABLES,
 } = {}) {
   const resolvedRepoRoot = path.resolve(repoRoot);
   const resolvedNodePath = path.resolve(nodePath);
@@ -22,7 +28,12 @@ function buildLaunchdPlan({
   const plistPath = path.join(launchAgentsDir, `${label}.plist`);
   const stdoutPath = path.join(resolvedRepoRoot, ".local", "logs", "autonomous-refresh-launchd.stdout.log");
   const stderrPath = path.join(resolvedRepoRoot, ".local", "logs", "autonomous-refresh-launchd.stderr.log");
-  const scriptPath = path.join(resolvedRepoRoot, "src", "cli", "refresh-autonomous.js");
+  const scriptPath = path.join(
+    resolvedRepoRoot,
+    "src",
+    "cli",
+    "run-autonomous-refresh-launchd.js",
+  );
 
   return {
     label,
@@ -35,6 +46,7 @@ function buildLaunchdPlan({
     stdoutPath,
     stderrPath,
     scriptPath,
+    environmentVariables: normalizeEnvironmentVariables(environmentVariables),
     domainTarget: `gui/${process.getuid()}`,
     serviceTarget: `gui/${process.getuid()}/${label}`,
   };
@@ -54,6 +66,10 @@ function renderLaunchdPlist(plan) {
     <string>${escapeXml(plan.nodePath)}</string>
     <string>${escapeXml(plan.scriptPath)}</string>
   </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+${renderEnvironmentVariables(plan.environmentVariables)}
+  </dict>
   <key>StartCalendarInterval</key>
   <dict>
     <key>Hour</key>
@@ -75,6 +91,7 @@ function renderLaunchdPlist(plan) {
 function installLaunchdJob(options = {}) {
   const plan = buildLaunchdPlan(options);
   ensureLaunchdDirectories(plan);
+  rotateLaunchdLogs(plan);
   fs.writeFileSync(plan.plistPath, renderLaunchdPlist(plan), "utf8");
   runLaunchctl(["bootout", plan.serviceTarget], { allowFailure: true });
   runLaunchctl(["bootstrap", plan.domainTarget, plan.plistPath]);
@@ -83,6 +100,35 @@ function installLaunchdJob(options = {}) {
     ...plan,
     installed: true,
   };
+}
+
+function rotateLaunchdLogs(
+  plan,
+  {
+    maxBytes = DEFAULT_LOG_MAX_BYTES,
+    retention = DEFAULT_LOG_RETENTION,
+  } = {},
+) {
+  return {
+    stdout_rotated: rotateFileIfOversize(plan.stdoutPath, { maxBytes, retention }),
+    stderr_rotated: rotateFileIfOversize(plan.stderrPath, { maxBytes, retention }),
+  };
+}
+
+function rotateFileIfOversize(filePath, { maxBytes, retention }) {
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).size <= maxBytes) {
+    return false;
+  }
+
+  for (let index = retention - 1; index >= 1; index -= 1) {
+    const source = `${filePath}.${index}`;
+    const target = `${filePath}.${index + 1}`;
+    if (fs.existsSync(source)) {
+      fs.renameSync(source, target);
+    }
+  }
+  fs.renameSync(filePath, `${filePath}.1`);
+  return true;
 }
 
 function uninstallLaunchdJob(options = {}) {
@@ -126,6 +172,21 @@ function ensureLaunchdDirectories(plan) {
   fs.mkdirSync(path.dirname(plan.stdoutPath), { recursive: true });
 }
 
+function normalizeEnvironmentVariables(environmentVariables) {
+  return Object.fromEntries(
+    Object.entries(environmentVariables ?? {})
+      .filter(([key, value]) => key && value !== undefined && value !== null)
+      .map(([key, value]) => [String(key), String(value)])
+      .sort(([left], [right]) => left.localeCompare(right)),
+  );
+}
+
+function renderEnvironmentVariables(environmentVariables) {
+  return Object.entries(environmentVariables ?? {})
+    .map(([key, value]) => `    <key>${escapeXml(key)}</key>\n    <string>${escapeXml(value)}</string>`)
+    .join("\n");
+}
+
 function runLaunchctl(args, { allowFailure = false } = {}) {
   try {
     return execFileSync("launchctl", args, {
@@ -152,13 +213,17 @@ function escapeXml(value) {
 }
 
 module.exports = {
+  DEFAULT_ENVIRONMENT_VARIABLES,
   DEFAULT_HOUR,
   DEFAULT_LABEL,
+  DEFAULT_LOG_MAX_BYTES,
+  DEFAULT_LOG_RETENTION,
   DEFAULT_MINUTE,
   buildLaunchdPlan,
   escapeXml,
   getLaunchdStatus,
   installLaunchdJob,
+  rotateLaunchdLogs,
   renderLaunchdPlist,
   uninstallLaunchdJob,
 };

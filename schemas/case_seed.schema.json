@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_type",
+    "source",
+    "promotion_state",
+    "canonical",
+    "case_seed_id",
+    "run_ref",
+    "session_ref",
+    "thread_ref",
+    "project_id",
+    "workspace_id",
+    "seed_packet",
+    "seed_packet_hash",
+    "source_run_artifact_hash",
+    "evidence_links",
+    "status",
+    "imported_at",
+    "last_seen_at",
+    "revision"
+  ],
+  "properties": {
+    "artifact_type": { "const": "ecitr_case_seed" },
+    "source": { "const": "agent_ops_closeout" },
+    "promotion_state": { "const": "staging" },
+    "canonical": { "const": false },
+    "case_seed_id": {
+      "type": "string",
+      "pattern": "^case_seed_[a-f0-9]{64}$"
+    },
+    "run_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "session_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "thread_ref": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workspace_id": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+    },
+    "seed_packet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "future_decision",
+        "activate_when",
+        "do_not_apply_when",
+        "plan_effect",
+        "problem",
+        "constraints",
+        "action_taken",
+        "outcome",
+        "failure_mode",
+        "confidence"
+      ],
+      "properties": {
+        "future_decision": { "type": "string", "minLength": 1 },
+        "activate_when": { "type": "string", "minLength": 1 },
+        "do_not_apply_when": { "type": "string", "minLength": 1 },
+        "plan_effect": { "type": "string", "minLength": 1 },
+        "problem": { "type": "string", "minLength": 1 },
+        "constraints": { "type": "string", "minLength": 1 },
+        "action_taken": { "type": "string", "minLength": 1 },
+        "outcome": { "type": "string", "minLength": 1 },
+        "failure_mode": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "seed_packet_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "source_run_artifact_hash": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "previous_seed_packet_hashes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^sha256:[a-f0-9]{64}$"
+      }
+    },
+    "evidence_links": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_evidence_ref",
+        "session_evidence_ref",
+        "chat_evidence_refs"
+      ],
+      "properties": {
+        "run_evidence_ref": {
+          "type": ["string", "null"],
+          "pattern": "^ev_[A-Za-z0-9_-]+$"
+        },
+        "session_evidence_ref": {
+          "type": ["string", "null"],
+          "pattern": "^ev_[A-Za-z0-9_-]+$"
+        },
+        "chat_evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^ev_[A-Za-z0-9_-]+$"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending_evidence", "ready_for_review", "compiled"]
+    },
+    "imported_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_seen_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

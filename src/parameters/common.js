@@ -58,12 +58,22 @@ function normalizeParameterKey(value) {
     .toLowerCase();
 }
 
-function createDefinitionId(observedKey) {
-  return `paramdef_${hashText(observedKey).slice(0, 20)}`;
+function createDefinitionId({ workspaceId = null, observedKey }) {
+  const seed = workspaceId ? `${workspaceId}:${observedKey}` : observedKey;
+  return `paramdef_${hashText(seed).slice(0, 20)}`;
 }
 
-function createObservationId({ parameterKey, observationKind, observedAt, sourceEvidenceRefs, sourceSpans, rawValueText }) {
+function createObservationId({
+  workspaceId = null,
+  parameterKey,
+  observationKind,
+  observedAt,
+  sourceEvidenceRefs,
+  sourceSpans,
+  rawValueText,
+}) {
   return `paramobs_${hashText(JSON.stringify({
+    workspaceId,
     parameterKey,
     observationKind,
     observedAt,

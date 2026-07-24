@@ -21,6 +21,10 @@
   ],
   "properties": {
     "observation_id": { "type": "string", "pattern": "^paramobs_[A-Za-z0-9_-]+$" },
+    "workspace_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+    },
     "definition_id": { "type": "string", "pattern": "^paramdef_[A-Za-z0-9_-]+$" },
     "parameter_key": { "type": "string", "minLength": 1 },
     "raw_value_text": { "type": "string" },

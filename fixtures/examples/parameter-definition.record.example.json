@@ -1,5 +1,6 @@
 {
-  "definition_id": "paramdef_ecitr_qdrant_url",
+  "definition_id": "paramdef_d69439bfc78f10ee3367",
+  "workspace_id": "ecitr_model",
   "observed_key": "ECITR_QDRANT_URL",
   "normalized_key": "ecitr_qdrant_url",
   "value_type": "string",

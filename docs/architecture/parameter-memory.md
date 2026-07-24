@@ -113,12 +113,38 @@ Runtime retrieval may use parameter support records internally to enrich existin
 
 ## Refresh Flow
 
-The autonomous refresh sequence now runs parameter extraction after evidence import and before case refresh and semantic sync.
+The autonomous refresh sequence now runs parameter extraction after evidence
+import and before case refresh, graph refresh, and semantic sync.
 
 The current order is:
 1. import and validate evidence
 2. refresh parameter support records
 3. refresh case drafts
-4. run governed promotions and downstream sync
+4. run governed promotions
+5. refresh the derived support graph
+6. sync the derived LanceDB index independently of promotion success
 
 This keeps case compilation and retrieval text aligned with the latest persisted parameter observations.
+
+Parameter refresh distills only the current member of each evidence correction
+chain. Superseded evidence remains immutable and queryable through lineage
+tools, but it is not reprocessed as current parameter input.
+
+Historical parameter observations remain immutable support records, but runtime
+retrieval hides an observation when all of its source evidence refs are
+superseded. Explicit case or tactic refs do not override that current-evidence
+visibility rule.
+
+## Conflict Policy
+
+Parameter refresh classifies existing-record mismatches before reporting health:
+
+- exact matches are skipped as already persisted
+- definition records that differ only in first-seen metadata or non-authoritative descriptor metadata are benign duplicates
+- definition `value_type` drift is warning-level because observation records preserve concrete observed value types
+- observation records that differ only in extraction metadata are benign duplicates
+- records that differ in material identity, value, source, workspace, or lineage fields are material conflicts
+- legacy definition workspace mismatches are repaired during live refresh only when the stable `definition_id` proves the corrected workspace
+- extraction errors are hard failures
+
+Autonomous refresh may continue green with benign parameter duplicates recorded as warnings. It must fail on extraction errors or material parameter conflicts.

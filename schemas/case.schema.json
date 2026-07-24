@@ -14,6 +14,10 @@
   ],
   "properties": {
     "case_id": { "type": "string", "pattern": "^case_[A-Za-z0-9_-]+$" },
+    "workspace_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+    },
     "case_version": { "type": "integer", "minimum": 1 },
     "status": { "type": "string", "enum": ["draft", "active", "deprecated", "superseded"] },
     "problem_statement": { "type": "string", "minLength": 1 },

@@ -32,8 +32,9 @@ function toNodeId(nodeType, recordId) {
   return `${nodeType}:${recordId}`;
 }
 
-function createSourceArtifactRecordId(locator) {
-  return `srcart_${hashText(locator).slice(0, 16)}`;
+function createSourceArtifactRecordId(locator, workspaceId = null) {
+  const seed = workspaceId ? `${workspaceId}:${locator}` : locator;
+  return `srcart_${hashText(seed).slice(0, 16)}`;
 }
 
 function createEdgeId({ kind, from, to }) {

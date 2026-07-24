@@ -19,6 +19,8 @@ function parseArgs(args) {
   const options = {
     catalogRoot: DEFAULT_CATALOG_ROOT,
     dryRun: false,
+    workspaceId: undefined,
+    includeLegacyAutodistill: true,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -29,6 +31,13 @@ function parseArgs(args) {
         break;
       case "--dry-run":
         options.dryRun = true;
+        break;
+      case "--workspace-id":
+        options.workspaceId = args[++index];
+        break;
+      case "--seed-only":
+      case "--skip-legacy-autodistill":
+        options.includeLegacyAutodistill = false;
         break;
       default:
         throw new Error(`Unknown argument: ${arg}`);

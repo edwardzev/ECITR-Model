@@ -7,23 +7,25 @@ const { REPO_ROOT } = require("../validation/schema-registry");
 const { readJson } = require("../validation/validator");
 const { compareSemanticBackends } = require("../retrieval/semantic-benchmark");
 const { buildSemanticEmbedder } = require("../retrieval/embedders/factory");
+const {
+  DEFAULT_LANCEDB_URI,
+  DEFAULT_TABLE_NAME: DEFAULT_LANCEDB_TABLE_NAME,
+  LanceDbSemanticBackend,
+} = require("../retrieval/semantic-backends/lancedb-backend");
 const { QdrantSemanticBackend } = require("../retrieval/semantic-backends/qdrant-backend");
 const { FileBackedCatalog } = require("../storage/file-backed-catalog");
 const { seedExampleCatalog } = require("../storage/seed-example-catalog");
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const endpoint = options.qdrantUrl ?? process.env.ECITR_QDRANT_URL;
-  const collectionName = options.collection ?? process.env.ECITR_QDRANT_COLLECTION;
-
-  if (!endpoint || !collectionName) {
-    throw new Error("benchmark-semantic requires --qdrant-url and --collection, or matching ECITR_QDRANT_URL and ECITR_QDRANT_COLLECTION env vars.");
-  }
-
   const { catalog, rootDir } = loadOrSeedCatalog(options);
   const catalogs = catalog.loadRuntimeCatalogs();
+  const embedderType = options.embedderType
+    ?? (options.backend === "lancedb"
+      ? process.env.ECITR_LANCEDB_EMBEDDER ?? "hash"
+      : process.env.ECITR_EMBEDDER ?? "openai");
   const embedder = buildSemanticEmbedder({
-    embedderType: options.embedderType,
+    embedderType,
     embeddingModel: options.embeddingModel,
     denseVectorSize: options.denseVectorSize,
     sparseBucketCount: options.sparseBucketCount ?? 2048,
@@ -32,6 +34,71 @@ async function main() {
     openAIOrganization: options.openAIOrganization ?? process.env.OPENAI_ORGANIZATION,
     openAIProject: options.openAIProject ?? process.env.OPENAI_PROJECT,
   });
+  const backendConfig = await buildCandidateBackend({
+    options,
+    catalogs,
+    embedder,
+  });
+
+  const scenarios = loadScenarios(options.scenarioFile);
+  const report = await compareSemanticBackends({
+    scenarios,
+    catalogs,
+    candidateBackend: backendConfig.backend,
+    candidateLabel: backendConfig.label,
+  });
+  const candidateQuality = report.quality_summary?.[backendConfig.label] ?? null;
+  const qualityPassed = !candidateQuality || candidateQuality.failing_scenarios === 0;
+
+  const output = {
+    ok: qualityPassed,
+    backend: backendConfig.label,
+    backend_target: backendConfig.target,
+    catalog_root: rootDir,
+    scenario_file: options.scenarioFile ?? path.join(REPO_ROOT, "benchmarks", "semantic-backend-comparison.scenarios.json"),
+    report,
+  };
+
+  if (options.outputFile) {
+    fs.writeFileSync(options.outputFile, `${JSON.stringify(output, null, 2)}\n`, "utf8");
+  }
+
+  process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+  if (!output.ok) {
+    process.exitCode = 1;
+  }
+}
+
+async function buildCandidateBackend({ options, catalogs, embedder }) {
+  if (options.backend === "lancedb") {
+    const uri = options.lancedbUri ?? process.env.ECITR_LANCEDB_URI ?? DEFAULT_LANCEDB_URI;
+    const tableName = options.lancedbTable ?? process.env.ECITR_LANCEDB_TABLE ?? DEFAULT_LANCEDB_TABLE_NAME;
+    const backend = new LanceDbSemanticBackend({
+      uri,
+      tableName,
+      catalogs,
+      embedder,
+    });
+
+    if (options.syncBeforeRun) {
+      await backend.syncCatalog();
+    }
+
+    return {
+      label: "lancedb",
+      target: {
+        uri,
+        table_name: tableName,
+      },
+      backend,
+    };
+  }
+
+  const endpoint = options.qdrantUrl ?? process.env.ECITR_QDRANT_URL;
+  const collectionName = options.collection ?? process.env.ECITR_QDRANT_COLLECTION;
+  if (!endpoint || !collectionName) {
+    throw new Error("benchmark-semantic requires --qdrant-url and --collection for --backend qdrant, or matching ECITR_QDRANT_URL and ECITR_QDRANT_COLLECTION env vars.");
+  }
 
   const backend = new QdrantSemanticBackend({
     endpoint,
@@ -48,27 +115,14 @@ async function main() {
     await backend.syncCatalog();
   }
 
-  const scenarios = loadScenarios(options.scenarioFile);
-  const report = await compareSemanticBackends({
-    scenarios,
-    catalogs,
-    qdrantBackend: backend,
-  });
-
-  const output = {
-    ok: true,
-    endpoint,
-    collectionName,
-    catalog_root: rootDir,
-    scenario_file: options.scenarioFile ?? path.join(REPO_ROOT, "benchmarks", "semantic-backend-comparison.scenarios.json"),
-    report,
+  return {
+    label: "qdrant",
+    target: {
+      endpoint,
+      collection_name: collectionName,
+    },
+    backend,
   };
-
-  if (options.outputFile) {
-    fs.writeFileSync(options.outputFile, `${JSON.stringify(output, null, 2)}\n`, "utf8");
-  }
-
-  process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
 }
 
 function loadScenarios(scenarioFile) {
@@ -97,10 +151,11 @@ function loadOrSeedCatalog(options) {
 
 function parseArgs(args) {
   const options = {
+    backend: "qdrant",
     syncBeforeRun: true,
     recreateCollection: false,
     seedExamples: false,
-    embedderType: process.env.ECITR_EMBEDDER ?? "openai",
+    embedderType: null,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -108,6 +163,15 @@ function parseArgs(args) {
     switch (arg) {
       case "--qdrant-url":
         options.qdrantUrl = args[++index];
+        break;
+      case "--backend":
+        options.backend = args[++index];
+        break;
+      case "--lancedb-uri":
+        options.lancedbUri = args[++index];
+        break;
+      case "--lancedb-table":
+        options.lancedbTable = args[++index];
         break;
       case "--collection":
         options.collection = args[++index];
@@ -151,6 +215,10 @@ function parseArgs(args) {
       default:
         throw new Error(`Unknown argument: ${arg}`);
     }
+  }
+
+  if (!["qdrant", "lancedb"].includes(options.backend)) {
+    throw new Error(`Unsupported --backend: ${options.backend}`);
   }
 
   return options;

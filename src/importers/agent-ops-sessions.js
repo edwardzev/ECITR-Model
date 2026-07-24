@@ -3,10 +3,16 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
 const { FilePayloadStore, createSha256 } = require("../evidence/file-payload-store");
+const {
+  buildEvidenceCorrectionIndex,
+  compareExpectedEvidenceToCurrent,
+} = require("../evidence/corrections");
 const { assertLifecycleRecord } = require("../lifecycle/rules");
+const { CaseSeedStore } = require("../cases/case-seed-store");
 const { FileBackedCatalog } = require("../storage/file-backed-catalog");
 const { EcitrValidator } = require("../validation/validator");
 const { buildEvidenceId: buildRunEvidenceId } = require("./agent-ops-runs");
+const { resolveWorkspaceIdForAgentOps } = require("../workspace/source-mapping");
 
 const SESSIONS_RELATIVE_ROOT = path.join("memory", "sessions");
 const PAYLOAD_NAMESPACE_SEGMENTS = Object.freeze(["agent-ops", "sessions"]);
@@ -18,6 +24,7 @@ function importAgentOpsSessions({
   agentOpsRoot,
   catalogRoot,
   projectId = null,
+  workspaceId = null,
   dryRun = true,
   limit = Number.POSITIVE_INFINITY,
   validator = new EcitrValidator(),
@@ -45,6 +52,11 @@ function importAgentOpsSessions({
     validator,
   });
   const payloadStore = new FilePayloadStore({ rootDir: resolvedCatalogRoot });
+  const evidenceCorrectionIndex = buildEvidenceCorrectionIndex(catalog.listRecords("evidence"));
+  const caseSeedStore = new CaseSeedStore({
+    rootDir: resolvedCatalogRoot,
+    validator,
+  });
   const sessionFilePaths = listSessionFiles(sessionsRoot);
   const seenEvidenceIds = new Map();
   const summary = {
@@ -62,6 +74,9 @@ function importAgentOpsSessions({
     skipped_non_terminal: 0,
     conflicts: 0,
     errors: 0,
+    case_seed_session_links_attached: 0,
+    case_seed_session_links_seen_existing: 0,
+    case_seed_session_link_conflicts: 0,
     project_counts: {},
     sample_results: [],
     conflict_details: [],
@@ -119,6 +134,11 @@ function importAgentOpsSessions({
       }
 
       summary.eligible_sessions += 1;
+      const resolvedWorkspaceId = resolveWorkspaceIdForAgentOps({
+        projectId: sessionRecord.project_id,
+        workspaceId,
+        catalogRoot: resolvedCatalogRoot,
+      });
       const outcome = importSingleSession({
         evidenceId,
         sessionFilePath,
@@ -128,6 +148,8 @@ function importAgentOpsSessions({
         payloadStore,
         dryRun,
         validator,
+        workspaceId: resolvedWorkspaceId,
+        evidenceCorrectionIndex,
       });
 
       if (outcome.status === "planned") {
@@ -143,6 +165,17 @@ function importAgentOpsSessions({
           source_locator: outcome.record.source_locator,
           conflict_fields: outcome.mismatches,
         });
+      }
+
+      if (!dryRun && outcome.status !== "conflict") {
+        const linkOutcome = caseSeedStore.attachSessionEvidence({
+          sessionRef: toPosixRelativePath(resolvedAgentOpsRoot, sessionFilePath),
+          sessionEvidenceRef: evidenceId,
+          now: outcome.record.captured_at,
+        });
+        summary.case_seed_session_links_attached += linkOutcome.attached;
+        summary.case_seed_session_links_seen_existing += linkOutcome.seen_existing;
+        summary.case_seed_session_link_conflicts += linkOutcome.conflicts;
       }
 
       pushCapped(summary.sample_results, toSampleResult(outcome), MAX_SAMPLE_RESULTS);
@@ -167,6 +200,8 @@ function importSingleSession({
   payloadStore,
   dryRun,
   validator,
+  workspaceId,
+  evidenceCorrectionIndex,
 }) {
   const payloadPlan = payloadStore.planPayload({
     evidenceId,
@@ -183,25 +218,29 @@ function importSingleSession({
     payloadHash: payloadPlan.payloadHash,
     sourceHash: createSha256(sourceBytes),
     parentEvidenceId,
+    workspaceId,
   });
 
   validator.validateRecord("evidence", record);
   assertLifecycleRecord("evidence", record);
 
-  const existing = catalog.getRecord("evidence", evidenceId);
-  if (existing) {
-    const mismatches = diffEvidenceRecords(existing, record);
-    if (mismatches.length === 0) {
+  const comparison = compareExpectedEvidenceToCurrent({
+    index: evidenceCorrectionIndex,
+    expectedRecord: record,
+    diffEvidenceRecords,
+  });
+  if (comparison) {
+    if (comparison.mismatches.length === 0) {
       return {
         status: "skipped_existing",
-        record,
+        record: comparison.currentRecord,
       };
     }
 
     return {
       status: "conflict",
       record,
-      mismatches,
+      mismatches: comparison.mismatches,
     };
   }
 
@@ -235,9 +274,11 @@ function buildEvidenceRecordFromSession({
   payloadHash,
   sourceHash,
   parentEvidenceId,
+  workspaceId = null,
 }) {
   const record = {
     evidence_id: buildSessionEvidenceId(sessionRecord.id),
+    ...(workspaceId ? { workspace_id: workspaceId } : {}),
     substrate_ref: pathToFileURL(path.resolve(sourcePath)).href,
     source_type: "file",
     source_locator: path.resolve(sourcePath),
@@ -312,6 +353,7 @@ function assertAgentOpsSessionRecord(sessionRecord, sessionFilePath) {
 function diffEvidenceRecords(existingRecord, nextRecord) {
   const keys = [
     "evidence_id",
+    "workspace_id",
     "substrate_ref",
     "source_type",
     "source_locator",
@@ -359,6 +401,10 @@ function listSessionFiles(rootDir) {
   }
 
   return files;
+}
+
+function toPosixRelativePath(rootDir, filePath) {
+  return path.relative(rootDir, filePath).split(path.sep).join("/");
 }
 
 function toSampleResult(outcome) {

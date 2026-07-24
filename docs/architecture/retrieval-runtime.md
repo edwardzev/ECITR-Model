@@ -15,14 +15,18 @@ The runtime may use multiple lanes, but fusion happens only after:
 
 Support records may enrich lane inputs, but they do not become independent retrieval result layers.
 
+When a retrieval request carries `workspace_id`, every returned canonical record must match that workspace before ranking can influence the result set. Missing workspace identity is treated as non-matching for that request.
+
 ## Runtime Stages
 
 1. accept a planner output
 2. execute eligible lanes
 3. collect candidate sets
-4. detect freshness and boundary conflicts
-5. fuse surviving candidates
-6. emit a retrieval response with explanations and conflicts
+4. reject candidates without sufficient relevance support
+5. detect freshness and boundary conflicts
+6. diversify evidence by source lineage
+7. fuse surviving candidates
+8. emit a retrieval response with explanations and bounded conflicts
 
 ## Runtime Intervention Layer
 
@@ -49,9 +53,18 @@ Initial lanes are simple and explicit:
 - metadata lane
 - semantic lane
 - temporal lane
-- evidence lane
+
+There is no query-independent evidence fallback. Proof-oriented requests may
+increase the evidence budget, but they must not manufacture arbitrary evidence
+when no evidence record is relevant.
 
 The semantic lane runs through a replaceable semantic backend interface so retrieval quality can improve without changing ECITR schemas or authority boundaries.
+
+Semantic-only candidates must be qualified by the backend before fusion admits
+them. The heuristic backend qualifies exact normalized-token matches. Qdrant
+and LanceDB candidates remain unqualified unless an evaluated backend-specific
+score or distance boundary is configured. Lexical or metadata corroboration may
+still admit a candidate from those backends.
 
 Parameter support records may enrich lexical, metadata, and semantic text for evidence, cases, and tactics. This enrichment does not change the retrieval request or response contracts.
 
@@ -76,7 +89,19 @@ The runtime must surface conflicts such as:
 - stale tactics
 - invalidated tactics
 - cross-project leakage when scope metadata exists
+- cross-workspace leakage when workspace metadata exists
 - duplicate support that only appears independent
+
+Public conflict text is intentionally bounded. Full exclusion counts remain in
+internal runtime diagnostics so intervention metrics do not depend on truncated
+human-readable strings.
+
+When no eligible relevant record survives, retrieval returns empty canonical
+result groups and an explicit abstention explanation.
+
+Evidence diversity uses workspace plus source locator as a source-lineage key.
+One source artifact may occupy at most one evidence slot, with higher score and
+newer capture time winning.
 
 See:
 - `docs/architecture/parameter-memory.md`

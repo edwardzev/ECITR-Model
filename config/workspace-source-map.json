@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "agent_ops_projects": [
+    {
+      "project_id": "ms_business_central",
+      "workspace_id": "ms_business_central"
+    }
+  ],
+  "codex_workspaces": [
+    {
+      "workspace_root": "/Users/edwardzev/MS Business Central",
+      "workspace_id": "ms_business_central"
+    }
+  ]
+}

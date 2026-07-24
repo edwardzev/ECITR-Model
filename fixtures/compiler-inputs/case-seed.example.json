@@ -1,0 +1,35 @@
+{
+  "artifact_type": "ecitr_case_seed",
+  "source": "agent_ops_closeout",
+  "promotion_state": "staging",
+  "canonical": false,
+  "case_seed_id": "case_seed_4ba41ac7c80b560d7e9dd24743bb55ce5af07c7a1e5964bc5f5b1e52d46fe099",
+  "run_ref": "memory/runs/2026/04/run_example.json",
+  "session_ref": "memory/sessions/2026/04/session_example.json",
+  "thread_ref": "codex-thread://thread-example",
+  "project_id": "agent_ops",
+  "workspace_id": "agent_ops_workspace",
+  "seed_packet": {
+    "future_decision": "Decide whether closeout-authored ECITR seed semantics apply.",
+    "activate_when": "An agent-ops run imports with ecitr_closeout.decision = candidate.",
+    "do_not_apply_when": "The closeout decision is none or not_applicable.",
+    "plan_effect": "Compile a draft case from the seed packet.",
+    "problem": "Reusable meaning must be authored while task context is fresh.",
+    "constraints": "Later evidence attachment must not rewrite seed semantics.",
+    "action_taken": "Captured a case seed during agent-ops closeout.",
+    "outcome": "ECITR can stage a review-gated draft case from the seed.",
+    "failure_mode": "Autonomous transcript distillation can blur or invent meaning.",
+    "confidence": 0.75
+  },
+  "seed_packet_hash": "sha256:0c0e2dbb825395a7af653bbbdc92b8f1657c3792677ea2cc46b0a3594628ee99",
+  "source_run_artifact_hash": "sha256:54479f0fc28064d6c406c5e2590cb29cb3593209fa9f7f8ae9314a3f14e4a501",
+  "evidence_links": {
+    "run_evidence_ref": "ev_aops_run_run_example",
+    "session_evidence_ref": null,
+    "chat_evidence_refs": []
+  },
+  "status": "ready_for_review",
+  "imported_at": "2026-04-11T12:00:00.000Z",
+  "last_seen_at": "2026-04-11T12:00:00.000Z",
+  "revision": 1
+}

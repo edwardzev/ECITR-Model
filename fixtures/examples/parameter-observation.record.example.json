@@ -1,6 +1,7 @@
 {
-  "observation_id": "paramobs_ecitr_qdrant_url_ev_mem_20260410_001",
-  "definition_id": "paramdef_ecitr_qdrant_url",
+  "observation_id": "paramobs_01041f2d5c6ded7a1520",
+  "definition_id": "paramdef_d69439bfc78f10ee3367",
+  "workspace_id": "ecitr_model",
   "parameter_key": "ECITR_QDRANT_URL",
   "raw_value_text": "http://127.0.0.1:6333",
   "value_type": "string",

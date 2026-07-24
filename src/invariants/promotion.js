@@ -36,6 +36,10 @@ class InvariantPromotionPipeline {
       updated_at: packet.created_at ?? this.now(),
     };
 
+    if (packet.workspace_id) {
+      draft.workspace_id = packet.workspace_id;
+    }
+
     if (packet.review_due_at) {
       draft.review_due_at = packet.review_due_at;
     }

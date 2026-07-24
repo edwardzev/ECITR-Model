@@ -8,9 +8,9 @@ const { runCaseBatch } = require("../src/cases/case-batch-runner");
 const { CaseReviewSurface } = require("../src/cases/case-review");
 const { FileBackedCatalog } = require("../src/storage/file-backed-catalog");
 
-test("case batch runner rejects blocked draft cases when configured to drain the waiting pool", () => {
+test("case batch runner rejects unamendable draft cases by default to drain the waiting pool", () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-case-batch-reject-"));
-  seedPrimitiveDraft(rootDir, { caseId: "case_blocked", evidenceId: "ev_blocked" });
+  seedPrimitiveDraft(rootDir, { caseId: "case_unamendable", evidenceId: "ev_unamendable" });
 
   const surface = new CaseReviewSurface({ catalogRoot: rootDir });
   const result = runCaseBatch({
@@ -18,13 +18,12 @@ test("case batch runner rejects blocked draft cases when configured to drain the
     limit: Number.MAX_SAFE_INTEGER,
     batchLogDir: path.join(rootDir, "review-drafts"),
     dryRun: false,
-    skipPreviouslyBlocked: false,
-    rejectErrors: true,
+    skipPreviouslyFailed: false,
   });
 
   assert.equal(result.rejected, 1);
   assert.equal(result.results[0].status, "rejected");
-  const nextRecord = new FileBackedCatalog({ rootDir }).getRecord("case", "case_blocked");
+  const nextRecord = new FileBackedCatalog({ rootDir }).getRecord("case", "case_unamendable");
   assert.equal(nextRecord.status, "deprecated");
   assert.equal(nextRecord.review_state, "reviewed");
 });

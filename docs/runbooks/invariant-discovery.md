@@ -53,6 +53,49 @@ This command:
 Use the emitted manifest for review, then benchmark or promote only the candidates that
 still look semantically real.
 
+## Live Candidate Entry Point
+
+The governed promotion runner now stages live invariant candidates directly from the
+active case pool:
+
+```bash
+npm run refresh:promotions
+```
+
+This writes generated candidates under `staging/live-invariant-candidates/` and then
+tries to process staged live candidates. Activation remains capped to three invariants
+per run by default. If no promotion judge is configured, the runner records a warning
+and leaves live candidates staged or judge-skipped.
+
+To enable the built-in conservative local judge:
+
+```bash
+ECITR_PROMOTION_JUDGE=local npm run refresh:promotions
+```
+
+To enable the OpenAI Responses API backed judge:
+
+```bash
+OPENAI_API_KEY=... \
+ECITR_PROMOTION_JUDGE=model \
+ECITR_PROMOTION_JUDGE_MODEL=gpt-5.2 \
+npm run refresh:promotions
+```
+
+Model-backed judgments write audit artifacts under
+`staging/promotion-judge-audits/`. Missing API keys, transport errors, timeouts, or
+invalid model JSON are treated as `unavailable`; the runner leaves candidates
+judge-skipped and records a warning instead of activating them.
+
+For `narrow`, the model may rewrite active-facing invariant fields such as `title`,
+`summary`, `statement`, and `why_it_is_stable` in addition to scope and breaker fields.
+Before activation, live invariant candidates pass a final quality gate. If those fields
+still look like generated shared-token prose or underscore-heavy machine-token lists,
+the candidate is retired instead of promoted.
+
+Use benchmark manifests for regression coverage and explicit fixtures. Do not treat
+`.local/benchmarks/*.json` as the production candidate source.
+
 ## Manifest Shape
 
 Each entry provides:
@@ -124,4 +167,7 @@ This command:
 - applies the invariant review decision
 - writes the canonical invariant record and review audit entry
 
-The same promotion surface is also used by the governed morning promotion runner, which only attempts benchmark-approved entries and skips candidates that are already active.
+The same promotion surface is also used by the governed promotion runner. For benchmark
+replay it only attempts benchmark-approved entries and skips candidates that are already
+active. For live promotion it consumes staged live candidates, runs the same support
+check, asks the promotion judge, and activates only within the configured cap.

@@ -1,4 +1,5 @@
 const { evaluateTacticFreshness } = require("../tactics/freshness");
+const { getRecordWorkspaceId, hasWorkspaceConflict } = require("../workspace/identity");
 
 function evaluateRetrievalEligibility({
   layer,
@@ -8,6 +9,16 @@ function evaluateRetrievalEligibility({
   now = new Date(),
 } = {}) {
   const recordId = getRecordId(layer, record);
+  const recordWorkspaceId = getRecordWorkspaceId(layer, record);
+
+  if (hasWorkspaceConflict({ requestWorkspaceId: request.workspace_id, recordWorkspaceId })) {
+    return {
+      eligible: false,
+      exclude: true,
+      code: "workspace_conflict",
+      message: `excluded ${layer.slice(0, -1)} ${recordId}: workspace ${recordWorkspaceId ?? "<missing>"} conflicts with request ${request.workspace_id}`,
+    };
+  }
 
   if (layer !== "evidence" && record.status !== "active") {
     return {

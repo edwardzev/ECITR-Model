@@ -4,10 +4,16 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
 const { FilePayloadStore, createSha256 } = require("../evidence/file-payload-store");
+const {
+  buildEvidenceCorrectionIndex,
+  compareExpectedEvidenceToCurrent,
+} = require("../evidence/corrections");
 const { assertLifecycleRecord } = require("../lifecycle/rules");
+const { CaseSeedStore } = require("../cases/case-seed-store");
 const { CodexImportState } = require("./codex-import-state");
 const { FileBackedCatalog } = require("../storage/file-backed-catalog");
 const { EcitrValidator } = require("../validation/validator");
+const { isPathWithinRoots, resolveWorkspaceIdForCodex } = require("../workspace/source-mapping");
 
 const PAYLOAD_NAMESPACE_SEGMENTS = Object.freeze(["codex", "rollouts"]);
 const SOURCE_LOCATOR_PREFIX = "codex-thread://";
@@ -25,6 +31,8 @@ function importCodexRollouts({
   limit = Number.POSITIVE_INFINITY,
   includeSessions = true,
   includeArchived = true,
+  workspaceRoot = null,
+  workspaceId = null,
   validator = new EcitrValidator(),
 } = {}) {
   if (!codexRoot) {
@@ -39,6 +47,7 @@ function importCodexRollouts({
 
   const resolvedCodexRoot = path.resolve(codexRoot);
   const resolvedCatalogRoot = path.resolve(catalogRoot);
+  const workspaceRoots = normalizeWorkspaceRoots(workspaceRoot);
   assertDirectoryExists(resolvedCodexRoot, "Codex root");
 
   const sessionIndex = loadSessionIndex(resolvedCodexRoot);
@@ -51,10 +60,15 @@ function importCodexRollouts({
     rootDir: resolvedCatalogRoot,
     validator,
   });
+  const caseSeedStore = new CaseSeedStore({
+    rootDir: resolvedCatalogRoot,
+    validator,
+  });
   const importState = CodexImportState.load({
     rootDir: resolvedCatalogRoot,
   });
   const payloadStore = new FilePayloadStore({ rootDir: resolvedCatalogRoot });
+  const evidenceCorrectionIndex = buildEvidenceCorrectionIndex(catalog.listRecords("evidence"));
   const latestSnapshots = loadLatestSnapshotsByLocator({
     catalog,
     catalogRoot: resolvedCatalogRoot,
@@ -65,6 +79,7 @@ function importCodexRollouts({
     catalog_root: resolvedCatalogRoot,
     include_sessions: includeSessions,
     include_archived: includeArchived,
+    workspace_root_filter: workspaceRoots.length > 0 ? workspaceRoots : null,
     checkpoint_policy: {
       days: DEFAULT_CHECKPOINT_POLICY.days,
       messages: DEFAULT_CHECKPOINT_POLICY.messages,
@@ -83,8 +98,11 @@ function importCodexRollouts({
     skipped_checkpoint: 0,
     skipped_duplicate_source: 0,
     skipped_no_visible_messages: 0,
+    skipped_workspace_filter: 0,
     conflicts: 0,
     errors: 0,
+    case_seed_chat_links_attached: 0,
+    case_seed_chat_links_seen_existing: 0,
     sample_results: [],
     conflict_details: [],
     error_details: [],
@@ -118,6 +136,16 @@ function importCodexRollouts({
         sourceStat,
         sessionIndex,
       });
+      if (workspaceRoots.length > 0 && !isPathWithinRoots(parsed.cwd, workspaceRoots)) {
+        summary.skipped_workspace_filter += 1;
+        pushCapped(summary.sample_results, {
+          status: "skipped_workspace_filter",
+          evidence_id: null,
+          source_locator: parsed.sourceLocator,
+          verbatim_payload_ref: null,
+        }, MAX_SAMPLE_RESULTS);
+        continue;
+      }
       if (parsed.visibleMessages.length === 0) {
         summary.skipped_no_visible_messages += 1;
         if (!dryRun) {
@@ -195,6 +223,11 @@ function importCodexRollouts({
         payloadHash: snapshotPlan.payloadHash,
         sourceLocator: parsed.sourceLocator,
       });
+      const resolvedWorkspaceId = resolveWorkspaceIdForCodex({
+        cwd: parsed.cwd,
+        workspaceId,
+        catalogRoot: resolvedCatalogRoot,
+      });
 
       const outcome = importSingleCodexRollout({
         parsed,
@@ -204,6 +237,8 @@ function importCodexRollouts({
         dryRun,
         validator,
         latestSnapshot,
+        workspaceId: resolvedWorkspaceId,
+        evidenceCorrectionIndex,
       });
 
       if (outcome.status === "planned") {
@@ -223,6 +258,13 @@ function importCodexRollouts({
 
       if (!dryRun && outcome.status !== "conflict") {
         importState.setSourceFingerprint(rolloutFilePath, sourceFingerprint);
+        const linkOutcome = caseSeedStore.attachChatEvidence({
+          threadRef: outcome.record.source_locator,
+          chatEvidenceRef: snapshotPlan.evidenceId,
+          now: outcome.record.captured_at,
+        });
+        summary.case_seed_chat_links_attached += linkOutcome.attached;
+        summary.case_seed_chat_links_seen_existing += linkOutcome.seen_existing;
       }
       updateLatestSnapshotState(latestSnapshots, outcome);
 
@@ -244,7 +286,17 @@ function importCodexRollouts({
   return summary;
 }
 
-function importSingleCodexRollout({ parsed, snapshotPlan, catalog, payloadStore, dryRun, validator, latestSnapshot }) {
+function importSingleCodexRollout({
+  parsed,
+  snapshotPlan,
+  catalog,
+  payloadStore,
+  dryRun,
+  validator,
+  latestSnapshot,
+  workspaceId,
+  evidenceCorrectionIndex,
+}) {
   const parentEvidenceId =
     latestSnapshot?.record?.evidence_id && latestSnapshot.record.evidence_id !== snapshotPlan.evidenceId
       ? latestSnapshot.record.evidence_id
@@ -252,18 +304,28 @@ function importSingleCodexRollout({ parsed, snapshotPlan, catalog, payloadStore,
   const record = buildEvidenceRecord({
     snapshotPlan,
     parentEvidenceId,
+    workspaceId,
   });
 
   validator.validateRecord("evidence", record);
   assertLifecycleRecord("evidence", record);
 
-  const existing = catalog.getRecord("evidence", snapshotPlan.evidenceId);
-  if (existing) {
-    const mismatches = diffEvidenceRecords(existing, record);
-    if (mismatches.length === 0 || isEquivalentLegacyCodexSnapshot(existing, record)) {
+  const comparison = compareExpectedEvidenceToCurrent({
+    index: evidenceCorrectionIndex,
+    expectedRecord: record,
+    diffEvidenceRecords,
+  });
+  if (comparison) {
+    if (
+      comparison.mismatches.length === 0
+      || isEquivalentLegacyCodexSnapshot(
+        comparison.currentRecord,
+        comparison.comparableExpected,
+      )
+    ) {
       return {
         status: "skipped_existing",
-        record,
+        record: comparison.currentRecord,
         metadata: deriveSnapshotMetadataFromPayload(snapshotPlan.payload),
       };
     }
@@ -271,7 +333,7 @@ function importSingleCodexRollout({ parsed, snapshotPlan, catalog, payloadStore,
     return {
       status: "conflict",
       record,
-      mismatches,
+      mismatches: comparison.mismatches,
     };
   }
 
@@ -431,9 +493,10 @@ function buildSnapshotPlan({ parsed, latestSnapshot, checkpointReason }) {
   };
 }
 
-function buildEvidenceRecord({ snapshotPlan, parentEvidenceId }) {
+function buildEvidenceRecord({ snapshotPlan, parentEvidenceId, workspaceId = null }) {
   const record = {
     evidence_id: snapshotPlan.evidenceId,
+    ...(workspaceId ? { workspace_id: workspaceId } : {}),
     substrate_ref: pathToFileURL(snapshotPlan.payload.source_rollout_path).href,
     source_type: "chat",
     source_locator: `${SOURCE_LOCATOR_PREFIX}${snapshotPlan.payload.thread_id}`,
@@ -489,6 +552,19 @@ function listRolloutFiles({ codexRoot, includeSessions, includeArchived }) {
   }
 
   return files.sort((left, right) => left.localeCompare(right));
+}
+
+function normalizeWorkspaceRoots(value) {
+  if (value == null || value === "") {
+    return [];
+  }
+
+  const roots = Array.isArray(value) ? value : [value];
+  return [...new Set(
+    roots
+      .filter((entry) => typeof entry === "string" && entry.trim().length > 0)
+      .map((entry) => path.resolve(entry)),
+  )];
 }
 
 function listJsonlFilesRecursive(rootDir) {
@@ -709,6 +785,7 @@ function inferActorScope(messages) {
 function diffEvidenceRecords(existingRecord, nextRecord) {
   const keys = [
     "evidence_id",
+    "workspace_id",
     "substrate_ref",
     "source_type",
     "source_locator",
@@ -730,6 +807,7 @@ function diffEvidenceRecords(existingRecord, nextRecord) {
 function isEquivalentLegacyCodexSnapshot(existingRecord, nextRecord) {
   return (
     existingRecord.evidence_id === nextRecord.evidence_id &&
+    normalizeComparableValue(existingRecord.workspace_id) === normalizeComparableValue(nextRecord.workspace_id) &&
     existingRecord.source_type === "chat" &&
     nextRecord.source_type === "chat" &&
     existingRecord.substrate_ref === nextRecord.substrate_ref &&
@@ -786,5 +864,6 @@ module.exports = {
   parseCodexRollout,
   buildEvidenceId,
   isEquivalentLegacyCodexSnapshot,
+  normalizeWorkspaceRoots,
   resolveDefaultCodexRoot,
 };

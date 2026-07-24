@@ -6,14 +6,19 @@ const { ReviewWorkflow } = require("../review/workflow");
 const { FileBackedCatalog } = require("../storage/file-backed-catalog");
 const { EcitrValidator } = require("../validation/validator");
 const { TacticPromotionPipeline } = require("./promotion");
+const { mergeWorkspaceIds } = require("../workspace/identity");
 
 class TacticDiscoverySurface {
-  constructor({
-    catalogRoot = DEFAULT_CATALOG_ROOT,
-    validator = new EcitrValidator(),
-    reviewWorkflow = new ReviewWorkflow({ validator }),
-    pipeline = new TacticPromotionPipeline({ validator }),
-  } = {}) {
+  constructor(options = {}) {
+    const catalogRoot = options.catalogRoot ?? DEFAULT_CATALOG_ROOT;
+    const validator = options.validator ?? new EcitrValidator();
+    const now = options.now ?? defaultNow;
+    const pipeline = options.pipeline ?? new TacticPromotionPipeline({ validator, now });
+    const reviewWorkflow = options.reviewWorkflow ?? new ReviewWorkflow({
+      validator,
+      tacticPipeline: pipeline,
+    });
+
     this.catalogRoot = path.resolve(catalogRoot);
     this.validator = validator;
     this.catalog = new FileBackedCatalog({ rootDir: this.catalogRoot, validator });
@@ -49,6 +54,7 @@ class TacticDiscoverySurface {
 
   preparePromotionPacket(entry) {
     const caseInspection = this.inspectSourceCases(entry.source_case_refs);
+    const promotionBasis = entry.promotion_basis ?? "invariant_backed";
     const invariantInspection = this.inspectSupportingInvariants(entry.supporting_invariant_refs);
 
     const missingCases = caseInspection.filter((item) => !item.exists).map((item) => item.case_id);
@@ -61,24 +67,35 @@ class TacticDiscoverySurface {
       throw new Error(`tactic discovery requires active source cases: ${inactiveCases.join(", ")}`);
     }
 
-    const missingInvariants = invariantInspection.filter((item) => !item.exists).map((item) => item.invariant_id);
-    if (missingInvariants.length > 0) {
-      throw new Error(`missing supporting invariants: ${missingInvariants.join(", ")}`);
-    }
+    if (promotionBasis !== "case_cluster" || invariantInspection.length > 0) {
+      const missingInvariants = invariantInspection.filter((item) => !item.exists).map((item) => item.invariant_id);
+      if (missingInvariants.length > 0) {
+        throw new Error(`missing supporting invariants: ${missingInvariants.join(", ")}`);
+      }
 
-    const inactiveInvariants = invariantInspection.filter((item) => item.status !== "active").map((item) => `${item.invariant_id}:${item.status}`);
-    if (inactiveInvariants.length > 0) {
-      throw new Error(`tactic discovery requires active supporting invariants: ${inactiveInvariants.join(", ")}`);
+      const inactiveInvariants = invariantInspection.filter((item) => item.status !== "active").map((item) => `${item.invariant_id}:${item.status}`);
+      if (inactiveInvariants.length > 0) {
+        throw new Error(`tactic discovery requires active supporting invariants: ${inactiveInvariants.join(", ")}`);
+      }
     }
 
     const sourceCases = caseInspection.map((item) => item.record);
     const supportingInvariants = invariantInspection.map((item) => item.record);
+    const workspaceId = mergeWorkspaceIds(
+      ...sourceCases.map((record) => record.workspace_id),
+      ...supportingInvariants.map((record) => record.workspace_id),
+    );
+    if (!workspaceId || workspaceId === "mixed") {
+      throw new Error("tactic discovery requires all supporting records to share one workspace_id");
+    }
     const title = String(entry.title ?? "").trim();
     const seriesKey = String(entry.series_key ?? slugify(title)).trim();
     const promotionId = entry.promotion_id ?? createPromotionId(seriesKey, caseInspection.map((item) => item.case_id), invariantInspection.map((item) => item.invariant_id));
 
     const packet = {
       promotion_id: promotionId,
+      promotion_basis: promotionBasis,
+      workspace_id: entry.workspace_id ?? workspaceId,
       proposed_tactic_id: entry.proposed_tactic_id ?? createTacticId(promotionId),
       version: entry.version ?? 1,
       series_key: seriesKey,
@@ -173,6 +190,10 @@ class TacticDiscoverySurface {
   }
 }
 
+function defaultNow() {
+  return new Date().toISOString();
+}
+
 function evaluateTacticCandidateReadiness(packet, sourceCases, supportingInvariants) {
   const candidateTokens = tokenizeTacticText([
     packet.title,
@@ -212,11 +233,15 @@ function evaluateTacticCandidateReadiness(packet, sourceCases, supportingInvaria
   if (sourceCases.length < 1) {
     reasons.push("tactic discovery requires at least one active supporting case");
   }
-  if (supportingInvariants.length < 1) {
+  if ((packet.promotion_basis ?? "invariant_backed") !== "case_cluster" && supportingInvariants.length < 1) {
     reasons.push("tactic discovery requires at least one active supporting invariant");
   }
+  if ((packet.promotion_basis ?? "invariant_backed") === "case_cluster" && sourceCases.length < 2) {
+    reasons.push("direct case-cluster tactic discovery requires at least two active supporting cases");
+  }
 
-  const weakCases = caseSupport.filter((item) => item.overlap_count < 4);
+  const minimumCaseOverlap = (packet.promotion_basis ?? "invariant_backed") === "case_cluster" ? 5 : 4;
+  const weakCases = caseSupport.filter((item) => item.overlap_count < minimumCaseOverlap);
   if (weakCases.length > 0) {
     reasons.push(`candidate tactic is not strongly supported by every source case: ${weakCases.map((item) => item.id).join(", ")}`);
   }
@@ -224,6 +249,13 @@ function evaluateTacticCandidateReadiness(packet, sourceCases, supportingInvaria
   const weakInvariants = invariantSupport.filter((item) => item.overlap_count < 3);
   if (weakInvariants.length > 0) {
     reasons.push(`candidate tactic is not strongly aligned with every supporting invariant: ${weakInvariants.map((item) => item.id).join(", ")}`);
+  }
+
+  if ((packet.promotion_basis ?? "invariant_backed") === "case_cluster") {
+    const sharedActionTokens = intersectAll(sourceCases.map(tokenizeCaseActionText));
+    if (sharedActionTokens.length < 2) {
+      reasons.push("direct case-cluster tactic requires a repeated action pattern across supporting cases");
+    }
   }
 
   if (!hasSubstantiveStep(packet.steps ?? [])) {
@@ -284,6 +316,14 @@ function tokenizeCaseText(sourceCase) {
   ].filter(Boolean).join(" ")).filter((token) => token && !STOP_WORDS.has(token));
 }
 
+function tokenizeCaseActionText(sourceCase) {
+  return tokenize([
+    sourceCase.action_taken,
+    sourceCase.outcome,
+    ...(sourceCase.context?.toolchain ?? []),
+  ].filter(Boolean).join(" ")).filter((token) => token && !STOP_WORDS.has(token));
+}
+
 function tokenizeInvariantText(invariant) {
   return tokenize([
     invariant.title,
@@ -309,6 +349,21 @@ function tokenize(value) {
 function intersectSets(left, right) {
   const rightSet = new Set(right);
   return [...new Set(left.filter((token) => rightSet.has(token)))];
+}
+
+function intersectAll(tokenLists) {
+  if (tokenLists.length === 0) {
+    return [];
+  }
+
+  let current = [...new Set(tokenLists[0])];
+  for (let index = 1; index < tokenLists.length; index += 1) {
+    current = intersectSets(current, tokenLists[index]);
+    if (current.length === 0) {
+      break;
+    }
+  }
+  return current;
 }
 
 function createPromotionId(seriesKey, caseIds, invariantIds) {

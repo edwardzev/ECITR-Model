@@ -3,9 +3,15 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
 const { FilePayloadStore, createSha256 } = require("../evidence/file-payload-store");
+const {
+  buildEvidenceCorrectionIndex,
+  compareExpectedEvidenceToCurrent,
+} = require("../evidence/corrections");
 const { assertLifecycleRecord } = require("../lifecycle/rules");
+const { CaseSeedStore } = require("../cases/case-seed-store");
 const { FileBackedCatalog } = require("../storage/file-backed-catalog");
 const { EcitrValidator } = require("../validation/validator");
+const { resolveWorkspaceIdForAgentOps } = require("../workspace/source-mapping");
 
 const RUNS_RELATIVE_ROOT = path.join("memory", "runs");
 const PAYLOAD_NAMESPACE_SEGMENTS = Object.freeze(["agent-ops", "runs"]);
@@ -16,6 +22,7 @@ function importAgentOpsRuns({
   agentOpsRoot,
   catalogRoot,
   projectId = null,
+  workspaceId = null,
   dryRun = true,
   limit = Number.POSITIVE_INFINITY,
   validator = new EcitrValidator(),
@@ -43,6 +50,11 @@ function importAgentOpsRuns({
     validator,
   });
   const payloadStore = new FilePayloadStore({ rootDir: resolvedCatalogRoot });
+  const evidenceCorrectionIndex = buildEvidenceCorrectionIndex(catalog.listRecords("evidence"));
+  const caseSeedStore = new CaseSeedStore({
+    rootDir: resolvedCatalogRoot,
+    validator,
+  });
   const runFilePaths = listJsonFiles(runsRoot);
   const seenEvidenceIds = new Map();
   const summary = {
@@ -58,6 +70,13 @@ function importAgentOpsRuns({
     skipped_existing: 0,
     conflicts: 0,
     errors: 0,
+    case_seeds_created: 0,
+    case_seeds_updated: 0,
+    case_seeds_seen_existing: 0,
+    case_seeds_compiled_conflicts: 0,
+    case_seeds_skipped_none: 0,
+    case_seeds_skipped_not_applicable: 0,
+    case_seed_errors: 0,
     project_counts: {},
     sample_results: [],
     conflict_details: [],
@@ -102,6 +121,11 @@ function importAgentOpsRuns({
       summary.candidate_runs += 1;
       summary.project_counts[runRecord.project_id] =
         (summary.project_counts[runRecord.project_id] ?? 0) + 1;
+      const resolvedWorkspaceId = resolveWorkspaceIdForAgentOps({
+        projectId: runRecord.project_id,
+        workspaceId,
+        catalogRoot: resolvedCatalogRoot,
+      });
 
       const outcome = importSingleRun({
         evidenceId,
@@ -112,6 +136,8 @@ function importAgentOpsRuns({
         payloadStore,
         dryRun,
         validator,
+        workspaceId: resolvedWorkspaceId,
+        evidenceCorrectionIndex,
       });
 
       if (outcome.status === "planned") {
@@ -129,6 +155,22 @@ function importAgentOpsRuns({
         });
       }
 
+      if (!dryRun) {
+        applyCaseSeedImport({
+          summary,
+          caseSeedStore,
+          runRecord,
+          runFilePath,
+          sourceBytes,
+          // Case-seed refs retain the deterministic source evidence id. The
+          // correction overlay resolves that id to the latest immutable
+          // correction without forcing every historical ref to be rewritten.
+          runEvidenceRef: evidenceId,
+          agentOpsRoot: resolvedAgentOpsRoot,
+          workspaceId: resolvedWorkspaceId,
+        });
+      }
+
       pushCapped(summary.sample_results, toSampleResult(outcome), MAX_SAMPLE_RESULTS);
     } catch (error) {
       summary.errors += 1;
@@ -142,6 +184,59 @@ function importAgentOpsRuns({
   return summary;
 }
 
+function applyCaseSeedImport({
+  summary,
+  caseSeedStore,
+  runRecord,
+  runFilePath,
+  sourceBytes,
+  runEvidenceRef,
+  agentOpsRoot,
+  workspaceId,
+}) {
+  const decision = runRecord.ecitr_closeout?.decision ?? null;
+  if (decision === "none") {
+    summary.case_seeds_skipped_none += 1;
+    return;
+  }
+
+  if (decision === "not_applicable") {
+    summary.case_seeds_skipped_not_applicable += 1;
+    return;
+  }
+
+  if (decision !== "candidate") {
+    return;
+  }
+
+  try {
+    const outcome = caseSeedStore.upsertFromRun({
+      runRef: toPosixRelativePath(agentOpsRoot, runFilePath),
+      runRecord,
+      runEvidenceRef,
+      workspaceId,
+      sourceRunArtifactHash: createSha256(sourceBytes),
+      now: runRecord.created_at,
+    });
+
+    if (outcome.status === "created") {
+      summary.case_seeds_created += 1;
+    } else if (outcome.status === "updated") {
+      summary.case_seeds_updated += 1;
+    } else if (outcome.status === "seen_existing") {
+      summary.case_seeds_seen_existing += 1;
+    } else if (outcome.status === "compiled_conflict") {
+      summary.case_seeds_compiled_conflicts += 1;
+    }
+  } catch (error) {
+    summary.case_seed_errors += 1;
+    pushCapped(summary.error_details, {
+      source_locator: path.resolve(runFilePath),
+      message: error.message,
+    });
+  }
+}
+
 function importSingleRun({
   evidenceId,
   runFilePath,
@@ -151,6 +246,8 @@ function importSingleRun({
   payloadStore,
   dryRun,
   validator,
+  workspaceId,
+  evidenceCorrectionIndex,
 }) {
   const payloadPlan = payloadStore.planPayload({
     evidenceId,
@@ -165,25 +262,29 @@ function importSingleRun({
     payloadRef: payloadPlan.relativeRef,
     payloadHash: payloadPlan.payloadHash,
     sourceHash: createSha256(sourceBytes),
+    workspaceId,
   });
 
   validator.validateRecord("evidence", record);
   assertLifecycleRecord("evidence", record);
 
-  const existing = catalog.getRecord("evidence", evidenceId);
-  if (existing) {
-    const mismatches = diffEvidenceRecords(existing, record);
-    if (mismatches.length === 0) {
+  const comparison = compareExpectedEvidenceToCurrent({
+    index: evidenceCorrectionIndex,
+    expectedRecord: record,
+    diffEvidenceRecords,
+  });
+  if (comparison) {
+    if (comparison.mismatches.length === 0) {
       return {
         status: "skipped_existing",
-        record,
+        record: comparison.currentRecord,
       };
     }
 
     return {
       status: "conflict",
       record,
-      mismatches,
+      mismatches: comparison.mismatches,
     };
   }
 
@@ -210,9 +311,17 @@ function importSingleRun({
   };
 }
 
-function buildEvidenceRecordFromRun({ runRecord, sourcePath, payloadRef, payloadHash, sourceHash }) {
+function buildEvidenceRecordFromRun({
+  runRecord,
+  sourcePath,
+  payloadRef,
+  payloadHash,
+  sourceHash,
+  workspaceId = null,
+}) {
   return {
     evidence_id: buildEvidenceId(runRecord.id),
+    ...(workspaceId ? { workspace_id: workspaceId } : {}),
     substrate_ref: pathToFileURL(path.resolve(sourcePath)).href,
     source_type: "file",
     source_locator: path.resolve(sourcePath),
@@ -254,6 +363,7 @@ function assertAgentOpsRunRecord(runRecord, runFilePath) {
 function diffEvidenceRecords(existingRecord, nextRecord) {
   const keys = [
     "evidence_id",
+    "workspace_id",
     "substrate_ref",
     "source_type",
     "source_locator",
@@ -299,6 +409,10 @@ function listJsonFiles(rootDir) {
   }
 
   return files;
+}
+
+function toPosixRelativePath(rootDir, filePath) {
+  return path.relative(rootDir, filePath).split(path.sep).join("/");
 }
 
 function toSampleResult(outcome) {

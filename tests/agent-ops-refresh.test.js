@@ -19,6 +19,7 @@ test("agent-ops refresh runs imports before sync and smoke validation", async ()
     catalogRoot: "/tmp/catalog",
     qdrantUrl: "http://127.0.0.1:6333",
     collectionName: "ecitr-local-catalog-v1",
+    skipQdrantSync: false,
     importRuns(options) {
       calls.push({ step: "runs", dryRun: options.dryRun });
       return { errors: 0, conflicts: 0, imported: 2, skipped_existing: 3 };

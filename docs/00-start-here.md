@@ -36,10 +36,12 @@ Canonical truth lives in:
 - `docs/architecture/storage-catalog.md`
 - `docs/architecture/case-compiler-pipeline.md`
 - `docs/architecture/atomic-claims-extraction.md`
+- `docs/architecture/parameter-memory.md`
 - `docs/architecture/review-workflow.md`
 - `docs/architecture/semantic-backend-interface.md`
 - `docs/architecture/retrieval-planner.md`
 - `docs/architecture/retrieval-runtime.md`
+- `docs/architecture/support-graph.md`
 - `docs/architecture/invariant-promotion-pipeline.md`
 - `docs/architecture/tactic-promotion-freshness.md`
 - `docs/architecture/orchestrator-runtime.md`
@@ -62,17 +64,19 @@ Everything else supports those documents.
 7. Read `docs/architecture/storage-catalog.md`.
 8. Read `docs/architecture/case-compiler-pipeline.md`.
 9. Read `docs/architecture/atomic-claims-extraction.md`.
-10. Read `docs/architecture/review-workflow.md`.
-11. Read `docs/architecture/semantic-backend-interface.md`.
-12. Read `docs/architecture/retrieval-planner.md`.
-13. Read `docs/architecture/retrieval-runtime.md`.
-14. Read `docs/architecture/invariant-promotion-pipeline.md`.
-15. Read `docs/architecture/tactic-promotion-freshness.md`.
-16. Read `docs/architecture/orchestrator-runtime.md`.
-17. Read each layer contract.
-18. Read `docs/change-control.md`.
-19. Read the relevant agent specification for your assigned scope.
-20. Read the glossary before proposing naming changes.
+10. Read `docs/architecture/parameter-memory.md`.
+11. Read `docs/architecture/review-workflow.md`.
+12. Read `docs/architecture/semantic-backend-interface.md`.
+13. Read `docs/architecture/retrieval-planner.md`.
+14. Read `docs/architecture/retrieval-runtime.md`.
+15. Read `docs/architecture/support-graph.md`.
+16. Read `docs/architecture/invariant-promotion-pipeline.md`.
+17. Read `docs/architecture/tactic-promotion-freshness.md`.
+18. Read `docs/architecture/orchestrator-runtime.md`.
+19. Read each layer contract.
+20. Read `docs/change-control.md`.
+21. Read the relevant agent specification for your assigned scope.
+22. Read the glossary before proposing naming changes.
 
 ## Ownership Model
 
@@ -115,6 +119,7 @@ If the change touches retrieval planning or baseline evaluation, inspect:
 
 If the change touches retrieval execution or fusion behavior, inspect:
 - `docs/architecture/retrieval-runtime.md`
+- `docs/architecture/support-graph.md`
 
 If the change touches invariant or tactic derivation, inspect:
 - `docs/architecture/invariant-promotion-pipeline.md`

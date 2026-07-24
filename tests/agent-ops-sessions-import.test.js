@@ -10,6 +10,7 @@ const {
   buildSessionEvidenceId,
   SESSIONS_RELATIVE_ROOT,
 } = require("../src/importers/agent-ops-sessions");
+const { CaseSeedStore, buildCaseSeedId } = require("../src/cases/case-seed-store");
 const { FileBackedCatalog } = require("../src/storage/file-backed-catalog");
 const { createSha256 } = require("../src/evidence/file-payload-store");
 
@@ -62,6 +63,11 @@ test("agent-ops sessions importer writes supporting evidence with parent links",
   assert.equal(record.source_hash, createSha256(sourceBytes));
   assert.equal(fs.readFileSync(payloadPath, "utf8"), sourceBytes.toString("utf8"));
 
+  const seedStore = new CaseSeedStore({ rootDir: catalogRoot });
+  const seed = seedStore.getSeed(buildCaseSeedId("memory/runs/2026/04/run_20260410173434_mcp.json"));
+  assert.equal(seed.evidence_links.session_evidence_ref, evidenceId);
+  assert.equal(seed.seed_packet.problem, "Session evidence should attach to the existing run-backed seed.");
+
   const secondPass = importAgentOpsSessions({
     agentOpsRoot,
     catalogRoot,
@@ -72,6 +78,82 @@ test("agent-ops sessions importer writes supporting evidence with parent links",
   assert.equal(secondPass.skipped_existing, 2);
   assert.equal(secondPass.skipped_non_terminal, 1);
   assert.equal(secondPass.errors, 0);
+});
+
+test("agent-ops sessions importer conflicts on workspace drift and remains idempotent within one workspace", () => {
+  const { agentOpsRoot, catalogRoot } = createImportFixture();
+  seedRunsIntoCatalog({ agentOpsRoot, catalogRoot });
+
+  const first = importAgentOpsSessions({
+    agentOpsRoot,
+    catalogRoot,
+    workspaceId: "workspace_alpha",
+    dryRun: false,
+  });
+  const identical = importAgentOpsSessions({
+    agentOpsRoot,
+    catalogRoot,
+    workspaceId: "workspace_alpha",
+    dryRun: false,
+  });
+  const wrongWorkspace = importAgentOpsSessions({
+    agentOpsRoot,
+    catalogRoot,
+    workspaceId: "workspace_beta",
+    dryRun: false,
+  });
+
+  assert.equal(first.imported, 2);
+  assert.equal(identical.skipped_existing, 2);
+  assert.equal(identical.conflicts, 0);
+  assert.equal(wrongWorkspace.skipped_existing, 0);
+  assert.equal(wrongWorkspace.conflicts, 2);
+  assert.ok(wrongWorkspace.conflict_details.every((detail) =>
+    detail.conflict_fields.includes("workspace_id")));
+});
+
+test("agent-ops session seed links retain stable source ids across workspace corrections", () => {
+  const { agentOpsRoot, catalogRoot } = createImportFixture();
+  seedRunsIntoCatalog({ agentOpsRoot, catalogRoot });
+
+  const first = importAgentOpsSessions({
+    agentOpsRoot,
+    catalogRoot,
+    workspaceId: "workspace_alpha",
+    dryRun: false,
+  });
+  assert.equal(first.imported, 2);
+
+  const catalog = new FileBackedCatalog({ rootDir: catalogRoot });
+  const sessionEvidence = catalog.listRecords("evidence")
+    .filter((record) => record.evidence_id.startsWith("ev_aops_session_"));
+  for (const record of sessionEvidence) {
+    catalog.writeRecord("evidence", {
+      ...record,
+      evidence_id: `${record.evidence_id}_workspace_beta`,
+      workspace_id: "workspace_beta",
+      correction_of: record.evidence_id,
+    });
+  }
+
+  const corrected = importAgentOpsSessions({
+    agentOpsRoot,
+    catalogRoot,
+    workspaceId: "workspace_beta",
+    dryRun: false,
+  });
+
+  assert.equal(corrected.skipped_existing, 2);
+  assert.equal(corrected.conflicts, 0);
+  assert.equal(corrected.case_seed_session_link_conflicts, 0);
+  assert.equal(corrected.case_seed_session_links_seen_existing, 1);
+
+  const seedStore = new CaseSeedStore({ rootDir: catalogRoot });
+  const seed = seedStore.getSeed(buildCaseSeedId("memory/runs/2026/04/run_20260410173434_mcp.json"));
+  assert.equal(
+    seed.evidence_links.session_evidence_ref,
+    buildSessionEvidenceId("session_20260410172725640_nrq7b6"),
+  );
 });
 
 function seedRunsIntoCatalog({ agentOpsRoot, catalogRoot }) {
@@ -105,6 +187,13 @@ function createImportFixture() {
     project_id: "agent_ops",
     agent: "codex_desktop",
     objective: "Test agent-ops run import mapping.",
+    steps_completed: ["Created a run-backed closeout seed."],
+    findings: ["Session evidence should later attach by session_ref."],
+    blockers: [],
+    next_actions: ["Import session evidence."],
+    session_ref: "memory/sessions/2026/04/session_20260410172725640_nrq7b6.json",
+    thread_ref: "codex-thread://thread-session-link",
+    ecitr_closeout: candidateCloseout(),
     created_at: "2026-04-10T17:34:34.209Z",
   });
   writeJson(sessionFilePath, {
@@ -164,4 +253,22 @@ function createImportFixture() {
 
 function writeJson(filePath, value) {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function candidateCloseout() {
+  return {
+    decision: "candidate",
+    seed: {
+      future_decision: "Decide whether a session evidence record should support a run-backed ECITR seed.",
+      activate_when: "A terminal agent-ops session imports with a run_ref matching a staged seed.",
+      do_not_apply_when: "The session is active or does not match the seed session_ref.",
+      plan_effect: "Attach session_evidence_ref as provenance only.",
+      problem: "Session evidence should attach to the existing run-backed seed.",
+      constraints: "Attachment must not rewrite the seed packet.",
+      action_taken: "Linked session evidence by exact session_ref.",
+      outcome: "The seed carries both run and session provenance.",
+      failure_mode: "Missing session provenance can make later review harder.",
+      confidence: 0.74,
+    },
+  };
 }

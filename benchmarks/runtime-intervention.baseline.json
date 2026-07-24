@@ -83,9 +83,7 @@
       "weak_hit": true,
       "selected_results": {
         "tactics": [],
-        "invariants": [
-          "inv_scope_filter_before_rank_001"
-        ],
+        "invariants": [],
         "cases": [],
         "evidence": [
           "ev_mem_20260410_001"
@@ -94,7 +92,9 @@
       "related_candidates": {
         "tactics": [],
         "cases": [],
-        "invariants": [],
+        "invariants": [
+          "inv_scope_filter_before_rank_001"
+        ],
         "evidence": []
       }
     }

@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "workspace_id": "ecitr_model",
+  "catalog_root": ".local/catalog",
+  "default_project_scope": "project",
+  "preflight_retrieval_mandatory": false,
+  "failure_retry_retrieval_mandatory": false
+}

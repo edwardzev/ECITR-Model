@@ -27,6 +27,11 @@
   ],
   "properties": {
     "id": { "type": "string", "pattern": "^tac_[A-Za-z0-9_-]+$" },
+    "promotion_basis": { "type": "string", "enum": ["invariant_backed", "case_cluster"] },
+    "workspace_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+    },
     "series_key": { "type": "string", "minLength": 1 },
     "layer": { "type": "string", "const": "tactic" },
     "status": { "type": "string", "enum": ["draft", "active", "superseded", "deprecated", "rejected"] },

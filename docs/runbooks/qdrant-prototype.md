@@ -60,6 +60,12 @@ Run the governed promotion segment directly without re-running evidence ingest:
 npm run refresh:promotions
 ```
 
+Sync the local derived LanceDB index directly:
+
+```bash
+npm run lancedb:sync
+```
+
 Install the ECITR-owned daily `launchd` scheduler for that autonomous path:
 
 ```bash
@@ -124,7 +130,10 @@ Useful flags:
 Recommended operating cadence:
 
 - run `npm run refresh:autonomous` once per day overnight
-- use `npm run refresh:promotions` when you want the morning promotion/re-sync step without replaying evidence ingest
+- use `npm run refresh:promotions` when you need governed promotion without replaying evidence ingest
+- use `npm run lancedb:sync` when the derived local semantic index must be refreshed directly
+- autonomous LanceDB sync is independent of promotion success, so a blocked promotion benchmark does not leave the derived index stale
+- non-default catalogs use isolated derived graph, report, and LanceDB roots unless explicit locations are supplied
 - run it manually when recent Codex conversations need to be available in retrieval earlier than the scheduled cadence
 - prefer the ECITR-owned `launchd` job over Codex app automation for schedule ownership
 

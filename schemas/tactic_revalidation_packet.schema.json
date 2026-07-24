@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "revalidation_id",
+    "tactic_id",
+    "previous_revalidate_at",
+    "next_revalidate_at",
+    "source_case_refs",
+    "supporting_invariant_refs",
+    "evidence_refs",
+    "checks",
+    "validated_on",
+    "reviewer",
+    "rationale",
+    "reviewed_at",
+    "previous_record_snapshot_hash",
+    "resulting_record_snapshot_hash"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "revalidation_id": { "type": "string", "pattern": "^reval_[A-Za-z0-9_-]+$" },
+    "tactic_id": { "type": "string", "pattern": "^tac_[A-Za-z0-9_-]+$" },
+    "previous_revalidate_at": { "type": "string", "format": "date-time" },
+    "next_revalidate_at": { "type": "string", "format": "date-time" },
+    "source_case_refs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^case_[A-Za-z0-9_-]+$" }
+    },
+    "supporting_invariant_refs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^inv_[A-Za-z0-9_-]+$" }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^ev_[A-Za-z0-9_-]+$" }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_cases_active",
+        "source_cases_lifecycle_valid",
+        "supporting_invariants_active",
+        "evidence_resolvable",
+        "invalidation_markers_clear",
+        "environment_bounds_reviewed",
+        "tool_version_bounds_reviewed"
+      ],
+      "properties": {
+        "source_cases_active": { "type": "boolean", "const": true },
+        "source_cases_lifecycle_valid": { "type": "boolean", "const": true },
+        "supporting_invariants_active": { "type": "boolean", "const": true },
+        "evidence_resolvable": { "type": "boolean", "const": true },
+        "invalidation_markers_clear": { "type": "boolean", "const": true },
+        "environment_bounds_reviewed": { "type": "boolean", "const": true },
+        "tool_version_bounds_reviewed": { "type": "boolean", "const": true }
+      }
+    },
+    "validated_on": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "reviewer": { "type": "string", "minLength": 1 },
+    "rationale": { "type": "string", "minLength": 1 },
+    "reviewed_at": { "type": "string", "format": "date-time" },
+    "previous_record_snapshot_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "resulting_record_snapshot_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}

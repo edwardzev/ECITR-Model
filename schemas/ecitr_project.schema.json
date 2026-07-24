@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ECITR Workspace Marker",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "workspace_id",
+    "catalog_root",
+    "default_project_scope",
+    "preflight_retrieval_mandatory",
+    "failure_retry_retrieval_mandatory"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "workspace_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+    },
+    "catalog_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "default_project_scope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "project_family",
+        "global"
+      ]
+    },
+    "preflight_retrieval_mandatory": {
+      "type": "boolean"
+    },
+    "failure_retry_retrieval_mandatory": {
+      "type": "boolean"
+    }
+  }
+}

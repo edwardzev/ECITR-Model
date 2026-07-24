@@ -1,6 +1,7 @@
 {
   "benchmark_id": "tactic_discovery_benchmark_example",
   "description": "Example tactic discovery benchmark over active cases and active invariants.",
+  "evaluation_at": "2026-06-30T00:00:00Z",
   "entries": [
     {
       "label": "approve_managed_qdrant_runtime",

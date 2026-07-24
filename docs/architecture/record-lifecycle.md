@@ -19,6 +19,10 @@ Rules:
 - corrections create new evidence records
 - `correction_of` links to earlier evidence without mutating it
 - `parent_evidence_id` traces lineage without changing factual authority
+- each evidence record may have at most one direct correction; missing parents,
+  correction forks, and correction cycles are invalid and retrieval fails closed
+- import comparison, canonical retrieval, and semantic export resolve a correction
+  chain to its single latest record while preserving every earlier record on disk
 
 Evidence may be appended, linked, or deprecated at the storage-management level, but the factual record is never rewritten.
 
@@ -54,6 +58,11 @@ Evidence may be appended, linked, or deprecated at the storage-management level,
   - no unresolved `open_questions`
 - `deprecated` cases preserve historical record state and do not need to satisfy the current active-case gate
 - this distinction exists so ECITR can retire historically promoted weak cases without rewriting or fabricating stronger framing
+- agent-authored closeout seed cases that are already approval-ready may be approved directly without bounded completion rewriting their seeded applicability
+- agent-authored closeout seed cases that fail readiness must not create a durable parked case population
+- if deterministic bounded completion can amend a draft into approval-ready shape, the batch runner applies that amendment immediately before approval
+- if a draft still cannot satisfy the governed case gate, the batch runner rejects it and the case becomes deprecated with review audit rationale
+- processing failures that prevent any decision belong in batch logs, not in case lifecycle state
 
 ## Invariants
 

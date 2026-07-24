@@ -52,6 +52,7 @@ test("qdrant exporter builds contextual points from the runtime catalog", async 
   assert.match(points[0].id, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   assert.equal(points[0].id, toQdrantPointId("tactics", "tac_metadata_prune_before_vector_rank_001"));
   assert.equal(points[0].payload.layer, "tactics");
+  assert.equal(points[0].payload.workspace_id, "ecitr_model");
   assert.equal(points[0].payload.embedding_signature, "fake:3:2");
   assert.match(points[0].payload.content_hash, /^sha256:/);
   assert.ok(points[2].payload.text.includes("Claims:"));
@@ -78,6 +79,7 @@ test("qdrant exporter includes payload-derived evidence text from the catalog si
     evidence: [
       {
         evidence_id: "ev_aops_run_test_002",
+        workspace_id: "ecitr_model",
         substrate_ref: "file:///tmp/run_test_002.json",
         source_type: "file",
         source_locator: "/tmp/run_test_002.json",
@@ -114,6 +116,7 @@ test("qdrant payload filter constrains layers and scope", () => {
     request: {
       request_id: "req_filter_001",
       query: "scope filtering",
+      workspace_id: "ecitr_model",
       project_scope: "project_family",
       intent: "analysis",
     },
@@ -129,6 +132,7 @@ test("qdrant payload filter constrains layers and scope", () => {
   });
 
   assert.deepEqual(filter.must[0].match.any, ["tactics", "invariants", "cases", "evidence"]);
+  assert.equal(filter.must.at(-1).match.value, "ecitr_model");
   assert.equal(filter.should[0].match.value, "project_family");
   assert.equal(filter.should[1].match.value, "global");
 });
@@ -138,6 +142,7 @@ test("qdrant payload filter pushes strict tactic freshness into qdrant", () => {
     request: {
       request_id: "req_filter_002",
       query: "latest tactic guidance",
+      workspace_id: "ecitr_model",
       project_scope: "project_family",
       intent: "action",
     },
@@ -152,34 +157,69 @@ test("qdrant payload filter pushes strict tactic freshness into qdrant", () => {
     now: new Date("2026-05-01T00:00:00.000Z"),
   });
 
-  const freshnessClause = filter.must.at(-1);
+  const freshnessClause = filter.must.find((entry) => Array.isArray(entry.should));
   assert.deepEqual(freshnessClause.should[0].match.any, ["invariants", "cases", "evidence"]);
   assert.equal(freshnessClause.should[1].must[0].match.value, "tactics");
   assert.equal(freshnessClause.should[1].must[2].range.gte, "2026-05-01T00:00:00.000Z");
+  assert.equal(filter.must.at(-1).match.value, "ecitr_model");
 });
 
 test("qdrant backend builds a hybrid query and maps payload-backed results", async () => {
   const catalogs = buildExampleCatalog();
+  const indexedPoints = await exportCatalogToQdrantPoints({
+    catalogs,
+    embedder: new FakeEmbedder(),
+  });
   const fetchCalls = [];
   const backend = new QdrantSemanticBackend({
     endpoint: "http://qdrant.local",
     collectionName: "ecitr-semantic",
     catalogs,
     embedder: new FakeEmbedder(),
+    minimumRelevanceScore: 0.9,
     fetchImpl: async (url, options) => {
       fetchCalls.push({ url, options });
+      if (url.endsWith("/points/scroll")) {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              points: indexedPoints.map((point) => ({
+                id: point.id,
+                payload: { content_hash: point.payload.content_hash },
+              })),
+              next_page_offset: null,
+            },
+          }),
+        };
+      }
       return {
         ok: true,
         json: async () => ({
           result: {
             points: [
               {
+                id: "invariants:inv_missing_from_canonical_catalog",
+                score: 0.99,
+                payload: {
+                  layer: "invariants",
+                  record_id: "inv_missing_from_canonical_catalog",
+                  record: {
+                    id: "inv_missing_from_canonical_catalog",
+                    status: "active",
+                  },
+                },
+              },
+              {
                 id: "invariants:inv_scope_filter_before_rank_001",
                 score: 0.93,
                 payload: {
                   layer: "invariants",
                   record_id: "inv_scope_filter_before_rank_001",
-                  record: catalogs.invariants[0],
+                  record: {
+                    ...catalogs.invariants[0],
+                    summary: "stale derived summary that must never be returned",
+                  },
                 },
               },
             ],
@@ -193,6 +233,7 @@ test("qdrant backend builds a hybrid query and maps payload-backed results", asy
     request: {
       request_id: "req_qdrant_query_001",
       query: "prevent unrelated project records from influencing ranking",
+      workspace_id: "ecitr_model",
       project_scope: "project_family",
       intent: "analysis",
     },
@@ -207,12 +248,85 @@ test("qdrant backend builds a hybrid query and maps payload-backed results", asy
     },
   });
 
-  assert.equal(fetchCalls.length, 1);
-  assert.equal(fetchCalls[0].url, "http://qdrant.local/collections/ecitr-semantic/points/query");
-  const body = JSON.parse(fetchCalls[0].options.body);
+  assert.equal(fetchCalls.length, 2);
+  assert.equal(fetchCalls[0].url, "http://qdrant.local/collections/ecitr-semantic/points/scroll");
+  assert.equal(fetchCalls[1].url, "http://qdrant.local/collections/ecitr-semantic/points/query");
+  const body = JSON.parse(fetchCalls[1].options.body);
   assert.equal(body.prefetch.length, 2);
   assert.equal(body.query.fusion, "rrf");
+  assert.equal(candidates.length, 1);
   assert.equal(candidates[0].recordId, "inv_scope_filter_before_rank_001");
+  assert.equal(candidates[0].semanticQualified, true);
+  assert.strictEqual(candidates[0].record, catalogs.invariants[0]);
+});
+
+test("qdrant backend rejects stale coverage after canonical status or workspace changes", async (t) => {
+  for (const scenario of [
+    {
+      name: "canonical record is deprecated",
+      mutate(catalogs) {
+        catalogs.invariants[0].status = "deprecated";
+      },
+    },
+    {
+      name: "canonical workspace is corrected",
+      mutate(catalogs) {
+        catalogs.invariants[0].workspace_id = "corrected_workspace";
+      },
+    },
+  ]) {
+    await t.test(scenario.name, async () => {
+      const catalogs = buildExampleCatalog();
+      const indexedPoints = await exportCatalogToQdrantPoints({
+        catalogs,
+        embedder: new FakeEmbedder(),
+      });
+      scenario.mutate(catalogs);
+      let queryCalled = false;
+      const backend = new QdrantSemanticBackend({
+        endpoint: "http://qdrant.local",
+        collectionName: "ecitr-semantic",
+        catalogs,
+        embedder: new FakeEmbedder(),
+        fetchImpl: async (url) => {
+          if (url.endsWith("/points/scroll")) {
+            return {
+              ok: true,
+              json: async () => ({
+                result: {
+                  points: indexedPoints.map((point) => ({
+                    id: point.id,
+                    payload: { content_hash: point.payload.content_hash },
+                  })),
+                  next_page_offset: null,
+                },
+              }),
+            };
+          }
+          queryCalled = true;
+          throw new Error("stale index must be rejected before querying candidates");
+        },
+      });
+
+      await assert.rejects(
+        () => backend.retrieve({
+          request: {
+            request_id: "req_qdrant_stale_coverage",
+            query: "canonical authority",
+            workspace_id: "ecitr_model",
+            project_scope: "project_family",
+            intent: "analysis",
+          },
+          plan: {
+            allowed_layers: ["invariants"],
+            max_results_per_layer: { invariants: 5 },
+          },
+        }),
+        /does not match the canonical catalog/,
+      );
+      assert.equal(queryCalled, false);
+    });
+  }
 });
 
 test("qdrant backend can build and execute a catalog upsert operation", async () => {

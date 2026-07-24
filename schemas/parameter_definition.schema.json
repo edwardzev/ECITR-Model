@@ -13,6 +13,10 @@
   ],
   "properties": {
     "definition_id": { "type": "string", "pattern": "^paramdef_[A-Za-z0-9_-]+$" },
+    "workspace_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+    },
     "observed_key": { "type": "string", "minLength": 1 },
     "normalized_key": { "type": "string", "minLength": 1 },
     "value_type": {

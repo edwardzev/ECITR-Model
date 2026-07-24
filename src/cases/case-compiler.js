@@ -25,6 +25,7 @@ class CaseCompiler {
     };
 
     assignIfPresent(draftCase, "problem_statement", packet.problem_statement);
+    assignIfPresent(draftCase, "workspace_id", packet.workspace_id);
     assignIfPresent(draftCase, "context", packet.context);
     assignIfPresent(draftCase, "action_taken", packet.action_taken);
     assignIfPresent(draftCase, "outcome", packet.outcome);

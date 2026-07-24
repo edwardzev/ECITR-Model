@@ -1,5 +1,6 @@
 {
   "evidence_id": "ev_mem_20260410_001",
+  "workspace_id": "ecitr_model",
   "substrate_ref": "mempalace://collection/ecitr-evidence/doc/2026-04-10-001",
   "source_type": "web",
   "source_locator": "https://github.com/example/memory-engine/issues/42",

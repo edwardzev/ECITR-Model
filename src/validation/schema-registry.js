@@ -20,6 +20,15 @@ const SCHEMA_REGISTRY = Object.freeze({
       "case-compilation.packet.example.json",
     ),
   },
+  case_seed: {
+    schemaPath: path.join(REPO_ROOT, "schemas", "case_seed.schema.json"),
+    fixturePath: path.join(
+      REPO_ROOT,
+      "fixtures",
+      "compiler-inputs",
+      "case-seed.example.json",
+    ),
+  },
   case_boundary_recovery_packet: {
     schemaPath: path.join(REPO_ROOT, "schemas", "case_boundary_recovery_packet.schema.json"),
     fixturePath: path.join(
@@ -110,6 +119,15 @@ const SCHEMA_REGISTRY = Object.freeze({
       "invariant-hypothesis-manifest.example.json",
     ),
   },
+  live_invariant_candidate: {
+    schemaPath: path.join(REPO_ROOT, "schemas", "live_invariant_candidate.schema.json"),
+    fixturePath: path.join(
+      REPO_ROOT,
+      "fixtures",
+      "compiler-inputs",
+      "live-invariant-candidate.example.json",
+    ),
+  },
   invariant: {
     schemaPath: path.join(REPO_ROOT, "schemas", "invariant.schema.json"),
     fixturePath: path.join(REPO_ROOT, "fixtures", "examples", "invariant.record.example.json"),
@@ -136,6 +154,42 @@ const SCHEMA_REGISTRY = Object.freeze({
       "tactic-promotion.packet.example.json",
     ),
   },
+  tactic_revalidation_packet: {
+    schemaPath: path.join(REPO_ROOT, "schemas", "tactic_revalidation_packet.schema.json"),
+    fixturePath: path.join(
+      REPO_ROOT,
+      "fixtures",
+      "compiler-inputs",
+      "tactic-revalidation.packet.example.json",
+    ),
+  },
+  live_tactic_candidate: {
+    schemaPath: path.join(REPO_ROOT, "schemas", "live_tactic_candidate.schema.json"),
+    fixturePath: path.join(
+      REPO_ROOT,
+      "fixtures",
+      "compiler-inputs",
+      "live-tactic-candidate.example.json",
+    ),
+  },
+  promotion_judge_response: {
+    schemaPath: path.join(REPO_ROOT, "schemas", "promotion_judge_response.schema.json"),
+    fixturePath: path.join(
+      REPO_ROOT,
+      "fixtures",
+      "compiler-inputs",
+      "promotion-judge.response.example.json",
+    ),
+  },
+  promotion_judge_audit: {
+    schemaPath: path.join(REPO_ROOT, "schemas", "promotion_judge_audit.schema.json"),
+    fixturePath: path.join(
+      REPO_ROOT,
+      "fixtures",
+      "compiler-inputs",
+      "promotion-judge-audit.example.json",
+    ),
+  },
   retrieval_request: {
     schemaPath: path.join(REPO_ROOT, "schemas", "retrieval_request.schema.json"),
     fixturePath: path.join(
@@ -152,6 +206,15 @@ const SCHEMA_REGISTRY = Object.freeze({
       "fixtures",
       "examples",
       "retrieval.response.example.json",
+    ),
+  },
+  ecitr_project: {
+    schemaPath: path.join(REPO_ROOT, "schemas", "ecitr_project.schema.json"),
+    fixturePath: path.join(
+      REPO_ROOT,
+      "fixtures",
+      "examples",
+      "ecitr.project.example.json",
     ),
   },
   review_decision_packet: {

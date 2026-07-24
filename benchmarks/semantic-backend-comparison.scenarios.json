@@ -6,6 +6,12 @@
       "query": "scope filter ranking project retrieval",
       "project_scope": "project_family",
       "intent": "analysis"
+    },
+    "expected_results": {
+      "tactics": ["tac_metadata_prune_before_vector_rank_001"],
+      "invariants": ["inv_scope_filter_before_rank_001"],
+      "cases": ["case_retrieval_scope_drift_001"],
+      "evidence": ["ev_mem_20260410_001"]
     }
   },
   {
@@ -15,6 +21,12 @@
       "query": "supporting evidence for scope filter ranking",
       "project_scope": "project_family",
       "intent": "audit"
+    },
+    "expected_results": {
+      "tactics": ["tac_metadata_prune_before_vector_rank_001"],
+      "invariants": ["inv_scope_filter_before_rank_001"],
+      "cases": ["case_retrieval_scope_drift_001"],
+      "evidence": ["ev_mem_20260410_001"]
     }
   },
   {
@@ -24,6 +36,12 @@
       "query": "How should ECITR prevent unrelated project records from influencing ranking and fusion?",
       "project_scope": "project_family",
       "intent": "analysis"
+    },
+    "expected_results": {
+      "tactics": ["tac_metadata_prune_before_vector_rank_001"],
+      "invariants": ["inv_scope_filter_before_rank_001"],
+      "cases": ["case_retrieval_scope_drift_001"],
+      "evidence": ["ev_mem_20260410_001"]
     }
   },
   {
@@ -33,6 +51,35 @@
       "query": "ECITR_QDRANT_URL",
       "project_scope": "project_family",
       "intent": "analysis"
+    },
+    "expected_results": {
+      "tactics": ["tac_metadata_prune_before_vector_rank_001"],
+      "cases": ["case_retrieval_scope_drift_001"],
+      "evidence": ["ev_mem_20260410_001"]
+    },
+    "forbidden_results": {
+      "invariants": ["inv_scope_filter_before_rank_001"]
+    }
+  },
+  {
+    "scenario_id": "semantic_compare_abstention_001",
+    "request": {
+      "request_id": "req_semantic_compare_005",
+      "query": "zzzxqv_nonexistent_74291",
+      "project_scope": "project_family",
+      "intent": "analysis"
+    },
+    "expected_results": {
+      "tactics": [],
+      "invariants": [],
+      "cases": [],
+      "evidence": []
+    },
+    "forbidden_results": {
+      "tactics": ["tac_metadata_prune_before_vector_rank_001"],
+      "invariants": ["inv_scope_filter_before_rank_001"],
+      "cases": ["case_retrieval_scope_drift_001"],
+      "evidence": ["ev_mem_20260410_001"]
     }
   }
 ]

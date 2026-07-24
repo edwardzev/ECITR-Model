@@ -13,6 +13,11 @@ const {
   toNodeId,
 } = require("./types");
 const { createSupportGraphBasisHash } = require("./basis");
+const {
+  buildEvidenceCorrectionIndex,
+  resolveLatestEvidenceCorrection,
+} = require("../evidence/corrections");
+const { mergeWorkspaceIds } = require("../workspace/identity");
 
 function buildSupportGraphSnapshot({
   catalogs,
@@ -52,6 +57,7 @@ function createContext(catalogs) {
   const atomicClaimSetsById = indexRecords(catalogs.atomic_claim_sets ?? [], (record) => record.claim_set_id);
   const parameterDefinitionsById = indexRecords(catalogs.parameter_definitions ?? [], (record) => record.definition_id);
   const parameterObservationsById = indexRecords(catalogs.parameter_observations ?? [], (record) => record.observation_id);
+  const evidenceCorrectionIndex = buildEvidenceCorrectionIndex(catalogs.evidence ?? []);
 
   return {
     catalogs,
@@ -62,6 +68,7 @@ function createContext(catalogs) {
     atomicClaimSetsById,
     parameterDefinitionsById,
     parameterObservationsById,
+    evidenceCorrectionIndex,
   };
 }
 
@@ -87,6 +94,7 @@ function buildEvidenceNodes(context) {
     record_type: "evidence",
     record_id: record.evidence_id,
     canonical: true,
+    workspace_id: record.workspace_id ?? null,
     project_scope: record.project_scope ?? "global",
     status: "immutable",
     review_state: null,
@@ -106,6 +114,7 @@ function buildCaseNodes(context) {
     record_type: "case",
     record_id: record.case_id,
     canonical: true,
+    workspace_id: record.workspace_id ?? null,
     project_scope: record.context?.project_scope ?? "global",
     status: record.status ?? "draft",
     review_state: record.review_state ?? null,
@@ -124,6 +133,7 @@ function buildInvariantNodes(context) {
     record_type: "invariant",
     record_id: record.id,
     canonical: true,
+    workspace_id: record.workspace_id ?? null,
     project_scope: "global",
     status: record.status ?? "draft",
     review_state: null,
@@ -142,6 +152,7 @@ function buildTacticNodes(context) {
     record_type: "tactic",
     record_id: record.id,
     canonical: true,
+    workspace_id: record.workspace_id ?? null,
     project_scope: "global",
     status: record.status ?? "draft",
     review_state: null,
@@ -160,6 +171,7 @@ function buildAtomicClaimSetNodes(context) {
     record_type: "atomic_claim_set",
     record_id: record.claim_set_id,
     canonical: false,
+    workspace_id: context.evidenceById.get(record.evidence_id)?.workspace_id ?? null,
     project_scope: context.evidenceById.get(record.evidence_id)?.project_scope ?? "global",
     status: "support",
     review_state: null,
@@ -172,22 +184,26 @@ function buildAtomicClaimSetNodes(context) {
 }
 
 function buildParameterDefinitionNodes(context) {
-  return (context.catalogs.parameter_definitions ?? []).map((record) => ({
-    node_id: toNodeId("parameter_definition", record.definition_id),
-    node_type: "parameter_definition",
-    record_type: "parameter_definition",
-    record_id: record.definition_id,
-    canonical: false,
-    project_scope: context.evidenceById.get(record.first_source_evidence_ref)?.project_scope ?? "global",
-    status: "support",
-    review_state: null,
-    display_name: record.observed_key,
-    metadata: {
-      observed_key: record.observed_key,
-      normalized_key: record.normalized_key,
-      value_type: record.value_type,
-    },
-  }));
+  return (context.catalogs.parameter_definitions ?? []).map((record) => {
+    const currentEvidence = resolveCurrentEvidence(context, record.first_source_evidence_ref);
+    return {
+      node_id: toNodeId("parameter_definition", record.definition_id),
+      node_type: "parameter_definition",
+      record_type: "parameter_definition",
+      record_id: record.definition_id,
+      canonical: false,
+      workspace_id: currentEvidence?.workspace_id ?? null,
+      project_scope: currentEvidence?.project_scope ?? "global",
+      status: "support",
+      review_state: null,
+      display_name: record.observed_key,
+      metadata: {
+        observed_key: record.observed_key,
+        normalized_key: record.normalized_key,
+        value_type: record.value_type,
+      },
+    };
+  });
 }
 
 function buildParameterObservationNodes(context) {
@@ -197,6 +213,7 @@ function buildParameterObservationNodes(context) {
     record_type: "parameter_observation",
     record_id: record.observation_id,
     canonical: false,
+    workspace_id: record.workspace_id ?? null,
     project_scope: record.project_scope ?? "global",
     status: "support",
     review_state: null,
@@ -218,7 +235,8 @@ function buildSourceArtifactNodes(context) {
       continue;
     }
 
-    const recordId = createSourceArtifactRecordId(locator);
+    const workspaceId = evidenceRecord.workspace_id ?? null;
+    const recordId = createSourceArtifactRecordId(locator, workspaceId);
     const existing = artifacts.get(recordId);
     const projectScope = evidenceRecord.project_scope ?? "global";
     if (!existing) {
@@ -228,6 +246,7 @@ function buildSourceArtifactNodes(context) {
         record_type: "source_artifact",
         record_id: recordId,
         canonical: false,
+        workspace_id: workspaceId,
         project_scope: projectScope,
         status: "support",
         review_state: null,
@@ -240,6 +259,7 @@ function buildSourceArtifactNodes(context) {
     }
 
     existing.project_scope = mergeProjectScopes(existing.project_scope, projectScope);
+    existing.workspace_id = mergeWorkspaceIds(existing.workspace_id, workspaceId);
   }
 
   return [...artifacts.values()];
@@ -282,7 +302,10 @@ function buildEdges(context, nodeIds) {
     if (evidenceRecord.source_locator) {
       addEdge(state, {
         from: evidenceNodeId,
-        to: toNodeId("source_artifact", createSourceArtifactRecordId(evidenceRecord.source_locator)),
+        to: toNodeId(
+          "source_artifact",
+          createSourceArtifactRecordId(evidenceRecord.source_locator, evidenceRecord.workspace_id ?? null),
+        ),
         kind: "evidence_source_artifact",
         confidenceLabel: "DECLARED",
         projectScope: evidenceRecord.project_scope ?? "global",
@@ -304,6 +327,18 @@ function buildEdges(context, nodeIds) {
         makeSupportRef("atomic_claim_set", claimSet.claim_set_id),
       ],
     }, nodeIds);
+    addCurrentEvidenceEdge(state, {
+      context,
+      evidenceId: claimSet.evidence_id,
+      otherNodeId: toNodeId("atomic_claim_set", claimSet.claim_set_id),
+      direction: "from_evidence",
+      kind: "current_evidence_claim_set",
+      projectScope: context.evidenceById.get(claimSet.evidence_id)?.project_scope ?? "global",
+      supportRefs: [
+        makeSupportRef("evidence", claimSet.evidence_id),
+        makeSupportRef("atomic_claim_set", claimSet.claim_set_id),
+      ],
+    }, nodeIds);
   }
 
   for (const observation of context.catalogs.parameter_observations ?? []) {
@@ -317,6 +352,19 @@ function buildEdges(context, nodeIds) {
           context.evidenceById.get(evidenceId)?.project_scope ?? "global",
           observation.project_scope ?? "global",
         ),
+        supportRefs: [
+          makeSupportRef("evidence", evidenceId),
+          makeSupportRef("parameter_observation", observation.observation_id),
+        ],
+        sourceSpans: observation.source_spans ?? [],
+      }, nodeIds);
+      addCurrentEvidenceEdge(state, {
+        context,
+        evidenceId,
+        otherNodeId: toNodeId("parameter_observation", observation.observation_id),
+        direction: "from_evidence",
+        kind: "current_evidence_parameter_observation",
+        projectScope: observation.project_scope ?? "global",
         supportRefs: [
           makeSupportRef("evidence", evidenceId),
           makeSupportRef("parameter_observation", observation.observation_id),
@@ -349,6 +397,15 @@ function buildEdges(context, nodeIds) {
         projectScope: mergeProjectScopes(projectScope, context.evidenceById.get(evidenceId)?.project_scope ?? "global"),
         supportRefs: [makeSupportRef("case", caseRecord.case_id)],
         originField: "evidence_refs",
+      }, nodeIds);
+      addCurrentEvidenceEdge(state, {
+        context,
+        evidenceId,
+        otherNodeId: caseNodeId,
+        direction: "to_evidence",
+        kind: "case_current_evidence",
+        projectScope,
+        supportRefs: [makeSupportRef("case", caseRecord.case_id)],
       }, nodeIds);
     }
 
@@ -414,6 +471,15 @@ function buildEdges(context, nodeIds) {
         supportRefs: [makeSupportRef("invariant", invariant.id)],
         originField: "evidence_refs",
       }, nodeIds);
+      addCurrentEvidenceEdge(state, {
+        context,
+        evidenceId,
+        otherNodeId: invariantNodeId,
+        direction: "to_evidence",
+        kind: "invariant_current_evidence",
+        projectScope: "global",
+        supportRefs: [makeSupportRef("invariant", invariant.id)],
+      }, nodeIds);
     }
 
     if (invariant.supersedes) {
@@ -466,6 +532,15 @@ function buildEdges(context, nodeIds) {
         supportRefs: [makeSupportRef("tactic", tactic.id)],
         originField: "evidence_refs",
       }, nodeIds);
+      addCurrentEvidenceEdge(state, {
+        context,
+        evidenceId,
+        otherNodeId: tacticNodeId,
+        direction: "to_evidence",
+        kind: "tactic_current_evidence",
+        projectScope: "global",
+        supportRefs: [makeSupportRef("tactic", tactic.id)],
+      }, nodeIds);
     }
 
     for (const observationId of tactic.parameter_observation_refs ?? []) {
@@ -500,6 +575,51 @@ function buildEdges(context, nodeIds) {
       || left.from.localeCompare(right.from)
       || left.to.localeCompare(right.to)),
   };
+}
+
+function addCurrentEvidenceEdge(state, {
+  context,
+  evidenceId,
+  otherNodeId,
+  direction,
+  kind,
+  projectScope,
+  supportRefs,
+  sourceSpans = [],
+}, nodeIds) {
+  const currentEvidence = resolveCurrentEvidence(context, evidenceId);
+  if (!currentEvidence || currentEvidence.evidence_id === evidenceId) {
+    return;
+  }
+
+  const currentEvidenceNodeId = toNodeId("evidence", currentEvidence.evidence_id);
+  addEdge(state, {
+    from: direction === "from_evidence" ? currentEvidenceNodeId : otherNodeId,
+    to: direction === "from_evidence" ? otherNodeId : currentEvidenceNodeId,
+    kind,
+    confidenceLabel: "EXTRACTED",
+    projectScope: mergeProjectScopes(
+      projectScope ?? "global",
+      currentEvidence.project_scope ?? "global",
+    ),
+    supportRefs: [
+      ...(supportRefs ?? []),
+      makeSupportRef("evidence", currentEvidence.evidence_id),
+    ],
+    sourceSpans,
+    originField: "resolved_evidence_correction",
+  }, nodeIds);
+}
+
+function resolveCurrentEvidence(context, evidenceId) {
+  if (!evidenceId) {
+    return null;
+  }
+
+  return resolveLatestEvidenceCorrection(
+    context.evidenceCorrectionIndex,
+    evidenceId,
+  ) ?? context.evidenceById.get(evidenceId) ?? null;
 }
 
 function addEdge(state, edge, nodeIds) {
