@@ -1,0 +1,138 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "migration_id",
+    "schema_version",
+    "status",
+    "target_workspace_id",
+    "source_selectors",
+    "basis_hash",
+    "planned_at",
+    "created_by",
+    "summary",
+    "operations",
+    "blockers"
+  ],
+  "properties": {
+    "migration_id": { "type": "string", "pattern": "^wam_[A-Za-z0-9_-]+$" },
+    "schema_version": { "type": "integer", "const": 1 },
+    "status": {
+      "type": "string",
+      "enum": ["planned", "applying", "applied", "applied_with_blockers", "failed"]
+    },
+    "target_workspace_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+    },
+    "source_selectors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent_ops_project_ids", "codex_workspace_roots"],
+      "properties": {
+        "agent_ops_project_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "codex_workspace_roots": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "basis_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "planned_at": { "type": "string", "format": "date-time" },
+    "applied_at": { "type": "string", "format": "date-time" },
+    "created_by": { "type": "string", "minLength": 1 },
+    "failure": { "type": "string", "minLength": 1 },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation_count", "blocker_count", "operation_counts"],
+      "properties": {
+        "operation_count": { "type": "integer", "minimum": 0 },
+        "blocker_count": { "type": "integer", "minimum": 0 },
+        "operation_counts": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "operation_id",
+          "action",
+          "record_type",
+          "record_id",
+          "target_record_id",
+          "from_workspace_id",
+          "to_workspace_id",
+          "before_hash",
+          "after_hash",
+          "before_record",
+          "after_record"
+        ],
+        "properties": {
+          "operation_id": { "type": "string", "pattern": "^wao_[a-f0-9]{20}$" },
+          "action": { "type": "string", "enum": ["append", "replace"] },
+          "record_type": {
+            "type": "string",
+            "enum": [
+              "evidence",
+              "case",
+              "invariant",
+              "tactic",
+              "parameter_definition",
+              "parameter_observation",
+              "case_seed",
+              "case_compilation_packet",
+              "invariant_promotion_packet",
+              "tactic_promotion_packet",
+              "live_invariant_candidate",
+              "live_tactic_candidate"
+            ]
+          },
+          "record_id": { "type": "string", "minLength": 1 },
+          "target_record_id": { "type": "string", "minLength": 1 },
+          "file_path": { "type": "string", "minLength": 1 },
+          "source_file_path": { "type": "string", "minLength": 1 },
+          "from_workspace_id": { "type": ["string", "null"] },
+          "to_workspace_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+          },
+          "before_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "after_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "before_record": { "type": "object" },
+          "after_record": { "type": "object" }
+        }
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["record_type", "record_id", "code", "message"],
+        "properties": {
+          "record_type": { "type": "string", "minLength": 1 },
+          "record_id": { "type": "string", "minLength": 1 },
+          "code": { "type": "string", "minLength": 1 },
+          "message": { "type": "string", "minLength": 1 },
+          "workspace_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    }
+  }
+}

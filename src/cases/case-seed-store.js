@@ -50,6 +50,7 @@ class CaseSeedStore {
     if (existing.seed_packet_hash === nextSeed.seed_packet_hash) {
       const updated = {
         ...existing,
+        workspace_id: nextSeed.workspace_id ?? existing.workspace_id,
         source_run_artifact_hash: existing.source_run_artifact_hash ?? nextSeed.source_run_artifact_hash,
         evidence_links: mergeEvidenceLinks(existing.evidence_links, nextSeed.evidence_links),
         status: existing.status === "compiled"

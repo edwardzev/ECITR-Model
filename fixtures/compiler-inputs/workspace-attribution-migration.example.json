@@ -1,0 +1,40 @@
+{
+  "migration_id": "wam_workspace_alpha_0123456789abcdef",
+  "schema_version": 1,
+  "status": "planned",
+  "target_workspace_id": "workspace_alpha",
+  "source_selectors": {
+    "agent_ops_project_ids": ["workspace_alpha"],
+    "codex_workspace_roots": ["/tmp/workspace-alpha"]
+  },
+  "basis_hash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "planned_at": "2099-01-01T00:00:00.000Z",
+  "created_by": "workspace-attribution-migrator-v1",
+  "summary": {
+    "operation_count": 1,
+    "blocker_count": 0,
+    "operation_counts": {
+      "evidence": 1
+    }
+  },
+  "operations": [
+    {
+      "operation_id": "wao_0123456789abcdef0123",
+      "action": "append",
+      "record_type": "evidence",
+      "record_id": "ev_source",
+      "target_record_id": "ev_source_workspace_workspace_alpha",
+      "from_workspace_id": "ecitr_model",
+      "to_workspace_id": "workspace_alpha",
+      "before_hash": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "after_hash": "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+      "before_record": {
+        "evidence_id": "ev_source"
+      },
+      "after_record": {
+        "evidence_id": "ev_source_workspace_workspace_alpha"
+      }
+    }
+  ],
+  "blockers": []
+}

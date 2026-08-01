@@ -4,6 +4,11 @@ const path = require("node:path");
 const { FileBackedCatalog } = require("../storage/file-backed-catalog");
 const { EcitrValidator, readJson } = require("../validation/validator");
 const { createDefinitionId, createObservationId } = require("../parameters/common");
+const {
+  buildEvidenceCorrectionIndex,
+  getCurrentEvidenceRecords,
+  resolveLatestEvidenceCorrection,
+} = require("../evidence/corrections");
 
 const STAGING_PACKET_DEFINITIONS = Object.freeze([
   {
@@ -69,10 +74,27 @@ function backfillWorkspaceIdentity({
   const resolvedCatalogRoot = path.resolve(catalogRoot);
   const catalog = new FileBackedCatalog({ rootDir: resolvedCatalogRoot, validator });
   const catalogs = catalog.loadRuntimeCatalogs();
+  const evidenceCorrectionIndex = buildEvidenceCorrectionIndex(catalogs.evidence ?? []);
+  const evidenceIdMap = new Map();
+  const transformedEvidence = getCurrentEvidenceRecords(catalogs.evidence ?? [])
+    .filter((record) => !record.workspace_id)
+    .map((record) => {
+      const correction = {
+        ...record,
+        evidence_id: `${record.evidence_id}_workspace_${workspaceId}`,
+        workspace_id: workspaceId,
+        correction_of: record.evidence_id,
+      };
+      evidenceIdMap.set(record.evidence_id, correction.evidence_id);
+      return correction;
+    });
+  const remapEvidenceId = (evidenceId) => evidenceIdMap.get(evidenceId)
+    ?? resolveLatestEvidenceCorrection(evidenceCorrectionIndex, evidenceId)?.evidence_id
+    ?? evidenceId;
 
   const definitionIdMap = new Map();
   const observationIdMap = new Map();
-  const transformedDefinitions = (catalogs.parameter_definitions ?? []).map((record) => {
+  const transformedDefinitions = dedupeRecords((catalogs.parameter_definitions ?? []).map((record) => {
     const nextWorkspaceId = record.workspace_id ?? workspaceId;
     const nextDefinitionId = createDefinitionId({
       workspaceId: nextWorkspaceId,
@@ -83,17 +105,19 @@ function backfillWorkspaceIdentity({
       ...record,
       definition_id: nextDefinitionId,
       workspace_id: nextWorkspaceId,
+      first_source_evidence_ref: remapEvidenceId(record.first_source_evidence_ref),
     };
-  });
+  }), "definition_id");
 
-  const transformedObservations = (catalogs.parameter_observations ?? []).map((record) => {
+  const transformedObservations = dedupeRecords((catalogs.parameter_observations ?? []).map((record) => {
     const nextWorkspaceId = record.workspace_id ?? workspaceId;
+    const nextSourceEvidenceRefs = record.source_evidence_refs.map(remapEvidenceId);
     const nextObservationId = createObservationId({
       workspaceId: nextWorkspaceId,
       parameterKey: record.parameter_key,
       observationKind: record.observation_kind,
       observedAt: record.observed_at,
-      sourceEvidenceRefs: record.source_evidence_refs,
+      sourceEvidenceRefs: nextSourceEvidenceRefs,
       sourceSpans: record.source_spans,
       rawValueText: record.raw_value_text,
     });
@@ -103,19 +127,17 @@ function backfillWorkspaceIdentity({
       observation_id: nextObservationId,
       workspace_id: nextWorkspaceId,
       definition_id: definitionIdMap.get(record.definition_id) ?? record.definition_id,
+      source_evidence_refs: nextSourceEvidenceRefs,
     };
   }).map((record) => ({
     ...record,
     ...(record.supersedes
       ? { supersedes: observationIdMap.get(record.supersedes) ?? record.supersedes }
       : {}),
-  }));
+  })), "observation_id");
 
   const transformed = {
-    evidence: (catalogs.evidence ?? []).map((record) => ({
-      ...record,
-      workspace_id: record.workspace_id ?? workspaceId,
-    })),
+    evidence: transformedEvidence,
     case: (catalogs.cases ?? []).map((record) => ({
       ...record,
       workspace_id: record.workspace_id ?? workspaceId,
@@ -165,8 +187,24 @@ function backfillWorkspaceIdentity({
       parameter_definitions: transformed.parameter_definition.length,
       parameter_observations: transformed.parameter_observation.length,
     },
-    parameter_definition_renames: countChangedIds(catalogs.parameter_definitions ?? [], transformed.parameter_definition, "definition_id"),
-    parameter_observation_renames: countChangedIds(catalogs.parameter_observations ?? [], transformed.parameter_observation, "observation_id"),
+    evidence_corrections: countMissingTargetIds({
+      catalog,
+      recordType: "evidence",
+      records: transformed.evidence,
+      idKey: "evidence_id",
+    }),
+    parameter_definition_renames: countMissingTargetIds({
+      catalog,
+      recordType: "parameter_definition",
+      records: transformed.parameter_definition,
+      idKey: "definition_id",
+    }),
+    parameter_observation_renames: countMissingTargetIds({
+      catalog,
+      recordType: "parameter_observation",
+      records: transformed.parameter_observation,
+      idKey: "observation_id",
+    }),
     staging_packets_updated: 0,
   };
 
@@ -206,46 +244,18 @@ function backfillWorkspaceIdentity({
   return summary;
 }
 
-function writeRecords({ catalog, recordType, previous, next }) {
+function writeRecords({ catalog, recordType, next }) {
   const idKey = getIdKey(recordType);
 
   for (const record of next) {
-    const filePath = catalog.getRecordPath(recordType, record[idKey]);
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
-  }
-
-  for (const previousRecord of previous) {
-    const nextRecord = next.find((candidate) => candidate[idKey] === previousRecord[idKey]);
-    if (nextRecord) {
+    const existing = catalog.getRecord(recordType, record[idKey]);
+    if (existing && JSON.stringify(existing) === JSON.stringify(record)) {
       continue;
     }
-
-    const nextId = findNextIdForPrevious({ previousRecord, next, recordType });
-    if (!nextId || nextId === previousRecord[idKey]) {
-      continue;
+    if (existing && recordType === "evidence") {
+      throw new Error(`Evidence backfill correction conflict: ${record[idKey]}`);
     }
-
-    const previousPath = catalog.getRecordPath(recordType, previousRecord[idKey]);
-    if (fs.existsSync(previousPath)) {
-      fs.unlinkSync(previousPath);
-    }
-  }
-
-  return;
-}
-
-function findNextIdForPrevious({ previousRecord, next, recordType }) {
-  switch (recordType) {
-    case "parameter_definition":
-      return next.find((record) => record.observed_key === previousRecord.observed_key)?.definition_id ?? null;
-    case "parameter_observation":
-      return next.find((record) =>
-        record.parameter_key === previousRecord.parameter_key
-        && record.observed_at === previousRecord.observed_at
-        && record.raw_value_text === previousRecord.raw_value_text)?.observation_id ?? null;
-    default:
-      return previousRecord[getIdKey(recordType)];
+    catalog.writeRecord(recordType, record, { overwrite: Boolean(existing) });
   }
 }
 
@@ -286,18 +296,20 @@ function countStagingPackets({ catalogRoot }) {
   return total;
 }
 
-function countChangedIds(previous, next, idKey) {
-  const nextBySignature = new Map(next.map((record) => [signatureFor(record, idKey), record[idKey]]));
-  return previous.reduce((count, record) =>
-    count + (nextBySignature.get(signatureFor(record, idKey)) !== record[idKey] ? 1 : 0), 0);
+function countMissingTargetIds({ catalog, recordType, records, idKey }) {
+  return records.filter((record) => !catalog.getRecord(recordType, record[idKey])).length;
 }
 
-function signatureFor(record, idKey) {
-  if (idKey === "definition_id") {
-    return `definition:${record.observed_key}`;
+function dedupeRecords(records, idKey) {
+  const byId = new Map();
+  for (const record of records) {
+    const existing = byId.get(record[idKey]);
+    if (existing && JSON.stringify(existing) !== JSON.stringify(record)) {
+      throw new Error(`Workspace backfill produced conflicting ${idKey}: ${record[idKey]}`);
+    }
+    byId.set(record[idKey], record);
   }
-
-  return `observation:${record.parameter_key}:${record.observed_at}:${record.raw_value_text}`;
+  return [...byId.values()];
 }
 
 function getIdKey(recordType) {

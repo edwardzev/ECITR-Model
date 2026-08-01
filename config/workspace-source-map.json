@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "agent_ops_registry_path": "/Users/edwardzev/agent-ops/memory/projects/_registry.json",
   "agent_ops_projects": [
     {
       "project_id": "ms_business_central",

@@ -42,25 +42,26 @@ Retrieval is separate. It finds, ranks, and fuses records, but it does not own s
 8. [case-compiler-pipeline](./docs/architecture/case-compiler-pipeline.md)
 9. [atomic-claims-extraction](./docs/architecture/atomic-claims-extraction.md)
 10. [parameter-memory](./docs/architecture/parameter-memory.md)
-11. [review-workflow](./docs/architecture/review-workflow.md)
-12. [semantic-backend-interface](./docs/architecture/semantic-backend-interface.md)
-13. [retrieval-planner](./docs/architecture/retrieval-planner.md)
-14. [retrieval-runtime](./docs/architecture/retrieval-runtime.md)
-15. [support-graph](./docs/architecture/support-graph.md)
-16. [invariant-promotion-pipeline](./docs/architecture/invariant-promotion-pipeline.md)
-17. [tactic-promotion-freshness](./docs/architecture/tactic-promotion-freshness.md)
-18. [orchestrator-runtime](./docs/architecture/orchestrator-runtime.md)
-19. Layer contracts:
+11. [workspace-attribution](./docs/architecture/workspace-attribution.md)
+12. [review-workflow](./docs/architecture/review-workflow.md)
+13. [semantic-backend-interface](./docs/architecture/semantic-backend-interface.md)
+14. [retrieval-planner](./docs/architecture/retrieval-planner.md)
+15. [retrieval-runtime](./docs/architecture/retrieval-runtime.md)
+16. [support-graph](./docs/architecture/support-graph.md)
+17. [invariant-promotion-pipeline](./docs/architecture/invariant-promotion-pipeline.md)
+18. [tactic-promotion-freshness](./docs/architecture/tactic-promotion-freshness.md)
+19. [orchestrator-runtime](./docs/architecture/orchestrator-runtime.md)
+20. Layer contracts:
    - [evidence](./docs/architecture/layers/evidence.md)
    - [cases](./docs/architecture/layers/cases.md)
    - [invariants](./docs/architecture/layers/invariants.md)
    - [invariant discovery](./docs/runbooks/invariant-discovery.md)
    - [tactics](./docs/architecture/layers/tactics.md)
    - [retrieval](./docs/architecture/layers/retrieval.md)
-20. [change-control](./docs/change-control.md)
-21. Agent specifications in `docs/agents/`
-22. Runbooks in `docs/runbooks/`
-23. [glossary](./docs/glossary.md)
+21. [change-control](./docs/change-control.md)
+22. Agent specifications in `docs/agents/`
+23. Runbooks in `docs/runbooks/`
+24. [glossary](./docs/glossary.md)
 
 ## Current State
 

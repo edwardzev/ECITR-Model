@@ -27,9 +27,17 @@ class LivePromotionCandidateStore {
   }
 
   upsertCandidate(candidate, { dryRun = false } = {}) {
-    this.validator.validateRecord(this.schemaKey, candidate);
-    const existing = this.getCandidate(candidate.candidate_id);
-    const next = mergeCandidateForUpsert(existing, candidate);
+    const incoming = withDiscoverySemanticsHash(candidate);
+    this.validator.validateRecord(this.schemaKey, incoming);
+    const candidateSeriesId = incoming.candidate_series_id ?? incoming.candidate_id;
+    const latest = this.getLatestCandidateForSeries(candidateSeriesId);
+    const prepared = prepareCandidateUpsert({
+      latest,
+      candidate: incoming,
+      candidateSeriesId,
+    });
+    const existing = this.getCandidate(prepared.candidate.candidate_id);
+    const next = mergeCandidateForUpsert(existing, prepared.candidate);
 
     if (!dryRun) {
       this.writeCandidate(next, { overwrite: Boolean(existing) });
@@ -37,8 +45,8 @@ class LivePromotionCandidateStore {
 
     return {
       candidateId: next.candidate_id,
-      status: existing ? "updated" : "created",
-      changed: !existing || !candidateSemanticsEqual(existing, candidate),
+      status: prepared.status ?? (existing ? "updated" : "created"),
+      changed: prepared.changed ?? (!existing || !candidateSemanticsEqual(existing, incoming)),
       candidate: next,
     };
   }
@@ -103,6 +111,17 @@ class LivePromotionCandidateStore {
       .filter((entry) => entry.endsWith(".json"))
       .sort()
       .map((entry) => readJson(path.join(directory, entry)));
+  }
+
+  getLatestCandidateForSeries(candidateSeriesId) {
+    return this.listCandidates()
+      .filter((candidate) =>
+        candidate.candidate_id === candidateSeriesId
+        || candidate.candidate_series_id === candidateSeriesId)
+      .sort((left, right) =>
+        right.revision - left.revision
+        || String(right.last_seen_at).localeCompare(String(left.last_seen_at))
+        || right.candidate_id.localeCompare(left.candidate_id))[0] ?? null;
   }
 
   getCandidatePath(candidateId) {
@@ -231,8 +250,7 @@ async function processCandidateKind({
   activationCap,
   dryRun,
 }) {
-  const candidates = store
-    .listCandidates()
+  const candidates = selectLatestCandidatesBySeries(store.listCandidates())
     .filter((candidate) => ["staged", "narrowed", "judge_skipped", "cap_skipped"].includes(candidate.status));
   const summary = createProcessingSummary(candidates.length);
 
@@ -697,11 +715,14 @@ function upsertCandidateSet({ store, candidates, dryRun }) {
   const writes = candidates.map((candidate) => store.upsertCandidate(candidate, { dryRun }));
   return {
     generated_count: candidates.length,
-    written_count: dryRun ? 0 : writes.filter((write) => write.status === "created").length,
+    written_count: dryRun ? 0 : writes.filter((write) =>
+      ["created", "revision_created"].includes(write.status)).length,
+    revision_created_count: dryRun ? 0 : writes.filter((write) =>
+      write.status === "revision_created").length,
     updated_count: dryRun ? 0 : writes.filter((write) => write.status === "updated" && write.changed).length,
     unchanged_count: dryRun ? 0 : writes.filter((write) => write.status === "updated" && !write.changed).length,
-    candidate_ids: candidates.map((candidate) => candidate.candidate_id),
-    candidates,
+    candidate_ids: writes.map((write) => write.candidateId),
+    candidates: writes.map((write) => write.candidate),
   };
 }
 
@@ -1126,29 +1147,120 @@ function mergeCandidateForUpsert(existing, candidate) {
     return candidate;
   }
 
-  const sameSemantics = candidateSemanticsEqual(existing, candidate);
-  const terminalStatus = ["activated", "retired"].includes(existing.status);
+  if (!candidateDiscoverySemanticsEqual(existing, candidate)) {
+    throw new Error(
+      `Live candidate revision id conflict for ${candidate.candidate_id}: discovery semantics differ.`,
+    );
+  }
+
   return {
-    ...candidate,
-    status: terminalStatus ? existing.status : candidate.status,
-    created_at: existing.created_at,
-    revision: sameSemantics ? existing.revision : existing.revision + 1,
-    decision_history: existing.decision_history ?? [],
+    ...existing,
+    last_seen_at: candidate.last_seen_at,
+    support_signals: candidate.support_signals,
+    discovery_semantics_hash: candidate.discovery_semantics_hash,
   };
 }
 
+function prepareCandidateUpsert({ latest, candidate, candidateSeriesId }) {
+  if (!latest) {
+    return { candidate };
+  }
+
+  const sameDiscoverySemantics = candidateDiscoverySemanticsEqual(latest, candidate);
+  if (!sameDiscoverySemantics) {
+    return {
+      status: "revision_created",
+      candidate: {
+        ...candidate,
+        candidate_id: buildCandidateRevisionId(
+          candidateSeriesId,
+          candidate,
+          latest.revision + 1,
+        ),
+        candidate_series_id: candidateSeriesId,
+        supersedes_candidate_id: latest.candidate_id,
+        status: "staged",
+        revision: latest.revision + 1,
+        decision_history: [],
+      },
+    };
+  }
+
+  return {
+    changed: false,
+    candidate: {
+      ...latest,
+      last_seen_at: candidate.last_seen_at,
+      support_signals: candidate.support_signals,
+      discovery_semantics_hash: candidate.discovery_semantics_hash,
+    },
+  };
+}
+
+function withDiscoverySemanticsHash(candidate) {
+  return {
+    ...candidate,
+    discovery_semantics_hash: candidate.discovery_semantics_hash
+      ?? hashCandidateDiscoverySemantics(candidate),
+  };
+}
+
+function candidateDiscoverySemanticsEqual(left, right) {
+  const leftHash = left.discovery_semantics_hash
+    ?? hashCandidateDiscoverySemantics(left);
+  const rightHash = right.discovery_semantics_hash
+    ?? hashCandidateDiscoverySemantics(right);
+  return leftHash === rightHash;
+}
+
+function hashCandidateDiscoverySemantics(candidate) {
+  return `sha256:${crypto
+    .createHash("sha256")
+    .update(JSON.stringify(candidateSemanticProjection(candidate)))
+    .digest("hex")}`;
+}
+
+function buildCandidateRevisionId(candidateSeriesId, candidate, revision) {
+  const digest = crypto
+    .createHash("sha1")
+    .update(candidate.discovery_semantics_hash ?? hashCandidateDiscoverySemantics(candidate))
+    .digest("hex")
+    .slice(0, 12);
+  return `${candidateSeriesId}_rev_${revision}_${digest}`;
+}
+
+function selectLatestCandidatesBySeries(candidates) {
+  const latestBySeries = new Map();
+  for (const candidate of candidates) {
+    const seriesId = candidate.candidate_series_id ?? candidate.candidate_id;
+    const current = latestBySeries.get(seriesId);
+    if (!current
+      || candidate.revision > current.revision
+      || (candidate.revision === current.revision
+        && String(candidate.last_seen_at).localeCompare(String(current.last_seen_at)) > 0)
+      || (candidate.revision === current.revision
+        && candidate.last_seen_at === current.last_seen_at
+        && candidate.candidate_id.localeCompare(current.candidate_id) > 0)) {
+      latestBySeries.set(seriesId, candidate);
+    }
+  }
+  return [...latestBySeries.values()];
+}
+
 function candidateSemanticsEqual(left, right) {
-  return JSON.stringify({
-    entry: left.entry,
-    source_case_refs: left.source_case_refs,
-    evidence_refs: left.evidence_refs,
-    counterexample_case_refs: left.counterexample_case_refs,
-  }) === JSON.stringify({
-    entry: right.entry,
-    source_case_refs: right.source_case_refs,
-    evidence_refs: right.evidence_refs,
-    counterexample_case_refs: right.counterexample_case_refs,
-  });
+  return JSON.stringify(candidateSemanticProjection(left))
+    === JSON.stringify(candidateSemanticProjection(right));
+}
+
+function candidateSemanticProjection(candidate) {
+  return {
+    workspace_id: candidate.workspace_id,
+    entry: candidate.entry,
+    source_case_refs: candidate.source_case_refs,
+    supporting_invariant_refs: candidate.supporting_invariant_refs,
+    evidence_refs: candidate.evidence_refs,
+    counterexample_case_refs: candidate.counterexample_case_refs,
+  };
 }
 
 const TOKEN_ALIASES = Object.freeze({

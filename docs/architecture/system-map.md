@@ -104,6 +104,7 @@ See:
 - `docs/architecture/case-compiler-pipeline.md`
 - `docs/architecture/atomic-claims-extraction.md`
 - `docs/architecture/parameter-memory.md`
+- `docs/architecture/workspace-attribution.md`
 - `docs/architecture/support-graph.md`
 - `docs/architecture/review-workflow.md`
 - `docs/architecture/semantic-backend-interface.md`

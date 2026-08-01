@@ -20,6 +20,7 @@
     "refresh:parameters": "node src/cli/refresh-parameters.js",
     "backfill:workspace-id": "node src/cli/backfill-workspace-id.js",
     "migrate:msbc-workspace": "node src/cli/migrate-msbc-workspace.js",
+    "migrate:workspace-attribution": "node src/cli/migrate-workspace-attribution.js",
     "refresh:support-graph": "node src/cli/refresh-support-graph.js",
     "refresh:cases": "node src/cli/refresh-cases.js",
     "refresh:promotions": "node src/cli/refresh-promotions.js",

@@ -24,6 +24,9 @@
   "properties": {
     "artifact_type": { "type": "string", "const": "live_tactic_candidate" },
     "candidate_id": { "type": "string", "pattern": "^ltc_[A-Za-z0-9_-]+$" },
+    "candidate_series_id": { "type": "string", "pattern": "^ltc_[A-Za-z0-9_-]+$" },
+    "supersedes_candidate_id": { "type": "string", "pattern": "^ltc_[A-Za-z0-9_-]+$" },
+    "discovery_semantics_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "layer": { "type": "string", "const": "tactic" },
     "status": {
       "type": "string",

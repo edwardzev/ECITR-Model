@@ -19,7 +19,7 @@ function main(argv = process.argv.slice(2)) {
 function parseArgs(argv) {
   let catalogRoot = DEFAULT_CATALOG_ROOT;
   let workspaceId = null;
-  let dryRun = false;
+  let dryRun = true;
 
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
@@ -35,6 +35,10 @@ function parseArgs(argv) {
     }
     if (value === "--dry-run") {
       dryRun = true;
+      continue;
+    }
+    if (value === "--apply") {
+      dryRun = false;
       continue;
     }
     throw new Error(`Unsupported argument: ${value}`);

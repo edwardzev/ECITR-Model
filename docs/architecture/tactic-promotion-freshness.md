@@ -18,6 +18,11 @@ Tactic discovery should remain benchmarked before promotion.
 
 Discovery may evaluate candidate tactics from active supporting cases and active supporting invariants, but canonical tactics are written only through staged `tactic_promotion_packet` artifacts and review.
 
+Terminal live tactic candidates are immutable review decisions. Regenerated
+semantic content for the same candidate series is written as a new staged
+revision linked by `candidate_series_id` and `supersedes_candidate_id`; it must
+pass review independently.
+
 ## Freshness Rule
 
 An active tactic is not automatically usable.

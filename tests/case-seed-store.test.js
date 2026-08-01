@@ -75,6 +75,36 @@ test("case seed store detects changed compiled seeds without overwriting semanti
   assert.equal(stored.seed_packet.confidence, 0.7);
 });
 
+test("case seed store corrects workspace attribution when seed semantics are unchanged", () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-case-seed-workspace-"));
+  const store = new CaseSeedStore({ rootDir });
+  const runRef = "memory/runs/2026/04/run_seed_workspace.json";
+  const runRecord = createRunRecord({ confidence: 0.7 });
+  const sourceRunArtifactHash = createSha256(JSON.stringify(runRecord));
+  const first = store.upsertFromRun({
+    runRef,
+    runRecord,
+    runEvidenceRef: "ev_aops_run_run_seed_workspace",
+    workspaceId: "ecitr_model",
+    sourceRunArtifactHash,
+    now: "2026-04-11T10:00:00.000Z",
+  });
+
+  const corrected = store.upsertFromRun({
+    runRef,
+    runRecord,
+    runEvidenceRef: "ev_aops_run_run_seed_workspace",
+    workspaceId: "project_workspace",
+    sourceRunArtifactHash,
+    now: "2026-04-11T10:05:00.000Z",
+  });
+
+  assert.equal(first.seed.seed_packet_hash, corrected.seed.seed_packet_hash);
+  assert.equal(corrected.status, "seen_existing");
+  assert.equal(corrected.seed.workspace_id, "project_workspace");
+  assert.equal(store.getSeed(first.seed.case_seed_id).workspace_id, "project_workspace");
+});
+
 function createRunRecord({ confidence }) {
   return {
     id: "run_seed_update",

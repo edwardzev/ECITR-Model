@@ -105,6 +105,145 @@ test("live staging is idempotent for unchanged candidates", () => {
   assert.equal(second.invariants.unchanged_count, 1);
 });
 
+test("terminal live candidates retain decided semantics and stage changed semantics as a new revision", () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-live-terminal-revision-"));
+  const store = new LivePromotionCandidateStore({ rootDir, kind: "invariant" });
+  const original = makeInvariantCandidate("lic_terminal_001", "terminal_001");
+  store.upsertCandidate(original);
+  store.updateCandidate(original.candidate_id, {
+    status: "activated",
+    decision_history: [
+      {
+        decided_at: "2099-01-01T01:00:00.000Z",
+        decision: "activated",
+        rationale: "approved original semantics",
+      },
+    ],
+  });
+
+  const changed = {
+    ...original,
+    last_seen_at: "2099-01-02T00:00:00.000Z",
+    entry: {
+      ...original.entry,
+      title: "Changed terminal candidate semantics",
+    },
+  };
+  const result = store.upsertCandidate(changed);
+  const base = store.getCandidate(original.candidate_id);
+  const revision = store.getCandidate(result.candidateId);
+
+  assert.equal(result.status, "revision_created");
+  assert.notEqual(result.candidateId, original.candidate_id);
+  assert.equal(base.status, "activated");
+  assert.equal(base.entry.title, original.entry.title);
+  assert.deepEqual(base.decision_history.map((entry) => entry.decision), ["activated"]);
+  assert.equal(revision.status, "staged");
+  assert.equal(revision.revision, 2);
+  assert.equal(revision.candidate_series_id, original.candidate_id);
+  assert.equal(revision.supersedes_candidate_id, original.candidate_id);
+  assert.equal(revision.entry.title, "Changed terminal candidate semantics");
+  assert.deepEqual(revision.decision_history, []);
+
+  const repeated = store.upsertCandidate(changed);
+  assert.equal(repeated.candidateId, result.candidateId);
+  assert.equal(repeated.status, "updated");
+  assert.equal(repeated.changed, false);
+  assert.equal(store.listCandidates().length, 2);
+});
+
+test("regenerated discovery semantics do not overwrite judge-narrowed terminal semantics", () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-live-terminal-narrowed-"));
+  const store = new LivePromotionCandidateStore({ rootDir, kind: "invariant" });
+  const generated = makeInvariantCandidate("lic_terminal_narrowed_001", "terminal_narrowed_001");
+  store.upsertCandidate(generated);
+  const persisted = store.getCandidate(generated.candidate_id);
+  store.updateCandidate(generated.candidate_id, {
+    ...persisted,
+    status: "activated",
+    entry: {
+      ...persisted.entry,
+      title: "Human-reviewed narrow title",
+      scope: ["Only the reviewed workspace boundary"],
+    },
+    decision_history: [
+      {
+        decided_at: "2099-01-01T01:00:00.000Z",
+        decision: "narrowed",
+        rationale: "narrowed before activation",
+      },
+      {
+        decided_at: "2099-01-01T01:01:00.000Z",
+        decision: "activated",
+        rationale: "approved narrowed semantics",
+      },
+    ],
+  });
+
+  const result = store.upsertCandidate({
+    ...generated,
+    last_seen_at: "2099-01-02T00:00:00.000Z",
+  });
+  const terminal = store.getCandidate(generated.candidate_id);
+
+  assert.equal(result.status, "updated");
+  assert.equal(result.changed, false);
+  assert.equal(store.listCandidates().length, 1);
+  assert.equal(terminal.status, "activated");
+  assert.equal(terminal.entry.title, "Human-reviewed narrow title");
+  assert.deepEqual(terminal.entry.scope, ["Only the reviewed workspace boundary"]);
+  assert.deepEqual(terminal.decision_history.map((entry) => entry.decision), ["narrowed", "activated"]);
+});
+
+test("candidate approval never transfers when an older semantic revision is rediscovered", () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-terminal-transfer-"));
+  const store = new LivePromotionCandidateStore({ rootDir, kind: "invariant" });
+  const seriesId = "lic_terminal_transfer";
+  const makeCandidate = (title, day) => {
+    const candidate = makeInvariantCandidate(seriesId, "terminal_transfer");
+    return {
+      ...candidate,
+      entry: { ...candidate.entry, title },
+      last_seen_at: `2099-01-0${day}T00:00:00.000Z`,
+    };
+  };
+
+  const first = store.upsertCandidate(makeCandidate("A", 1));
+  store.updateCandidate(first.candidateId, {
+    status: "activated",
+    decision_history: [{
+      decided_at: "2099-01-01T00:10:00.000Z",
+      decision: "activated",
+      rationale: "A reviewed",
+    }],
+  });
+  const second = store.upsertCandidate(makeCandidate("B", 2));
+  const third = store.upsertCandidate(makeCandidate("C", 3));
+  store.updateCandidate(third.candidateId, {
+    status: "activated",
+    decision_history: [{
+      decided_at: "2099-01-03T00:10:00.000Z",
+      decision: "activated",
+      rationale: "C reviewed",
+    }],
+  });
+
+  const rediscovered = store.upsertCandidate(makeCandidate("B", 4));
+
+  assert.notEqual(second.candidateId, third.candidateId);
+  assert.notEqual(third.candidateId, rediscovered.candidateId);
+  assert.equal(rediscovered.status, "revision_created");
+  assert.equal(rediscovered.candidate.status, "staged");
+  assert.deepEqual(rediscovered.candidate.decision_history, []);
+  assert.equal(rediscovered.candidate.supersedes_candidate_id, third.candidateId);
+  assert.notEqual(rediscovered.candidate.supersedes_candidate_id, rediscovered.candidateId);
+  assert.equal(store.getCandidate(third.candidateId).status, "activated");
+  assert.deepEqual(
+    store.getCandidate(third.candidateId).decision_history.map((entry) => entry.rationale),
+    ["C reviewed"],
+  );
+});
+
 test("live processing marks candidates judge-skipped when the judge is unavailable", async () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-live-process-"));
   const store = new LivePromotionCandidateStore({ rootDir, kind: "invariant" });

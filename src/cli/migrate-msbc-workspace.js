@@ -18,7 +18,7 @@ function parseArgs(args) {
     targetWorkspaceId: "ms_business_central",
     agentOpsProjectIds: [],
     codexWorkspaceRoots: [],
-    dryRun: false,
+    dryRun: true,
     includeStaging: true,
   };
 
@@ -39,6 +39,9 @@ function parseArgs(args) {
         break;
       case "--dry-run":
         options.dryRun = true;
+        break;
+      case "--apply":
+        options.dryRun = false;
         break;
       case "--skip-staging":
         options.includeStaging = false;

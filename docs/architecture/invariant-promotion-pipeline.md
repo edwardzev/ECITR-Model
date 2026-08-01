@@ -26,6 +26,12 @@ candidates. It activates conservatively: no more than three invariants per run b
 default. If the promotion judge is unavailable, live candidates stay staged or
 judge-skipped and the runner records a warning instead of activating them.
 
+An `activated` or `retired` live candidate is a terminal reviewed artifact. If
+later discovery generates different semantic fields for the same deterministic
+candidate series, ECITR writes a new staged revision with
+`candidate_series_id` and `supersedes_candidate_id`. It never carries the old
+terminal decision onto unreviewed semantics.
+
 Before live promotion, ECITR may run a discovery benchmark over the active case pool.
 That benchmark does not write invariants. It prepares candidate promotion packets from
 explicit invariant hypotheses plus active supporting case refs, checks whether the

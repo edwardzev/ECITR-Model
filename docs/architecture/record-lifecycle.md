@@ -26,6 +26,10 @@ Rules:
 
 Evidence may be appended, linked, or deprecated at the storage-management level, but the factual record is never rewritten.
 
+Workspace-attribution migration and legacy backfill follow the same rule. They
+append a deterministic correction with `correction_of`; they never edit or
+delete the original evidence file.
+
 ## Cases
 
 `case_id` identifies the case series.
@@ -33,6 +37,10 @@ Evidence may be appended, linked, or deprecated at the storage-management level,
 `case_version` increments when the same case framing is revised.
 
 `supersedes_case_id` is reserved for replacing a different case series whose framing proved materially wrong or incomplete.
+
+A metadata-only workspace-attribution correction is not a semantic case
+revision. It preserves `case_version` and review state and records complete
+before/after content in a workspace-attribution migration manifest.
 
 ### Allowed Status Transitions
 
@@ -70,6 +78,10 @@ Evidence may be appended, linked, or deprecated at the storage-management level,
 
 `series_key` identifies the invariant lineage across versions.
 
+A metadata-only workspace-attribution correction does not create a new
+invariant version. Its correction lineage belongs to the migration manifest,
+not semantic supersession fields.
+
 ### Allowed Status Transitions
 
 - `draft -> active`
@@ -92,6 +104,9 @@ Evidence may be appended, linked, or deprecated at the storage-management level,
 `id` identifies a concrete tactic record.
 
 `series_key` identifies the tactic lineage across versions.
+
+Metadata-only workspace-attribution correction follows the same manifest rule
+as invariants and does not reuse tactic supersession for bookkeeping.
 
 ### Allowed Status Transitions
 

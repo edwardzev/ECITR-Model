@@ -217,6 +217,15 @@ const SCHEMA_REGISTRY = Object.freeze({
       "ecitr.project.example.json",
     ),
   },
+  workspace_attribution_migration: {
+    schemaPath: path.join(REPO_ROOT, "schemas", "workspace_attribution_migration.schema.json"),
+    fixturePath: path.join(
+      REPO_ROOT,
+      "fixtures",
+      "compiler-inputs",
+      "workspace-attribution-migration.example.json",
+    ),
+  },
   review_decision_packet: {
     schemaPath: path.join(REPO_ROOT, "schemas", "review_decision_packet.schema.json"),
     fixturePath: path.join(

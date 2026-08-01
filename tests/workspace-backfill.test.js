@@ -5,6 +5,8 @@ const os = require("node:os");
 const path = require("node:path");
 
 const { FileBackedCatalog } = require("../src/storage/file-backed-catalog");
+const { buildEvidenceCorrectionIndex } = require("../src/evidence/corrections");
+const { createDefinitionId, createObservationId } = require("../src/parameters/common");
 const { backfillWorkspaceIdentity } = require("../src/workspace/backfill");
 const { loadExample } = require("./helpers/load-example");
 
@@ -61,21 +63,59 @@ test("workspace backfill stamps workspace ids and rewrites parameter ids plus pa
   });
 
   assert.equal(summary.workspace_id, "workspace_alpha");
+  assert.equal(summary.evidence_corrections, 1);
   assert.equal(summary.parameter_definition_renames, 1);
   assert.equal(summary.parameter_observation_renames, 1);
 
   const nextCatalog = catalog.loadRuntimeCatalogs();
-  assert.equal(nextCatalog.evidence[0].workspace_id, "workspace_alpha");
+  assert.equal(nextCatalog.evidence.length, 2);
+  assert.equal(nextCatalog.evidence.find((record) => record.evidence_id === evidence.evidence_id).workspace_id, undefined);
+  const evidenceCorrection = nextCatalog.evidence.find((record) =>
+    record.correction_of === evidence.evidence_id);
+  assert.equal(evidenceCorrection.workspace_id, "workspace_alpha");
   assert.equal(nextCatalog.cases[0].workspace_id, "workspace_alpha");
   assert.equal(nextCatalog.tactics[0].workspace_id, "workspace_alpha");
-  assert.equal(nextCatalog.parameter_definitions[0].workspace_id, "workspace_alpha");
-  assert.equal(nextCatalog.parameter_observations[0].workspace_id, "workspace_alpha");
-  assert.equal(nextCatalog.parameter_definitions[0].definition_id, "paramdef_5a502d3a55e2f60ba5f5");
-  assert.equal(nextCatalog.parameter_observations[0].observation_id, "paramobs_265197eb534bb1c861da");
-  assert.deepEqual(nextCatalog.cases[0].parameter_observation_refs, ["paramobs_265197eb534bb1c861da"]);
-  assert.deepEqual(nextCatalog.tactics[0].parameter_observation_refs, ["paramobs_265197eb534bb1c861da"]);
+  const expectedDefinitionId = createDefinitionId({
+    workspaceId: "workspace_alpha",
+    observedKey: parameterDefinition.observed_key,
+  });
+  const expectedObservationId = createObservationId({
+    workspaceId: "workspace_alpha",
+    parameterKey: parameterObservation.parameter_key,
+    observationKind: parameterObservation.observation_kind,
+    observedAt: parameterObservation.observed_at,
+    sourceEvidenceRefs: [evidenceCorrection.evidence_id],
+    sourceSpans: parameterObservation.source_spans,
+    rawValueText: parameterObservation.raw_value_text,
+  });
+  const nextDefinition = nextCatalog.parameter_definitions.find((record) =>
+    record.definition_id === expectedDefinitionId);
+  const nextObservation = nextCatalog.parameter_observations.find((record) =>
+    record.observation_id === expectedObservationId);
+  assert.equal(nextDefinition.workspace_id, "workspace_alpha");
+  assert.equal(nextObservation.workspace_id, "workspace_alpha");
+  assert.deepEqual(nextObservation.source_evidence_refs, [evidenceCorrection.evidence_id]);
+  assert.deepEqual(nextCatalog.cases[0].parameter_observation_refs, [expectedObservationId]);
+  assert.deepEqual(nextCatalog.tactics[0].parameter_observation_refs, [expectedObservationId]);
 
   const packet = JSON.parse(fs.readFileSync(path.join(packetDir, "legacy.json"), "utf8"));
   assert.equal(packet.workspace_id, "workspace_alpha");
-  assert.deepEqual(packet.parameter_observation_refs, ["paramobs_265197eb534bb1c861da"]);
+  assert.deepEqual(packet.parameter_observation_refs, [expectedObservationId]);
+
+  const repeated = backfillWorkspaceIdentity({
+    catalogRoot: rootDir,
+    workspaceId: "workspace_alpha",
+  });
+  assert.equal(repeated.evidence_corrections, 0);
+  assert.equal(repeated.parameter_definition_renames, 0);
+  assert.equal(repeated.parameter_observation_renames, 0);
+
+  const differentWorkspace = backfillWorkspaceIdentity({
+    catalogRoot: rootDir,
+    workspaceId: "workspace_beta",
+  });
+  assert.equal(differentWorkspace.evidence_corrections, 0);
+  const finalEvidence = catalog.listRecords("evidence");
+  assert.equal(finalEvidence.length, 2);
+  assert.doesNotThrow(() => buildEvidenceCorrectionIndex(finalEvidence));
 });
