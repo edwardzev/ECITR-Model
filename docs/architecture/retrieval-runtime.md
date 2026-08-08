@@ -62,7 +62,7 @@ continue to receive their normal raw text input.
 The tokenizer contract is:
 
 - preserve Unicode letters, numbers, combining marks, and underscore-delimited
-  identifiers such as `ECITR_QDRANT_URL`
+  identifiers such as `ECITR_LANCEDB_URI`
 - split punctuation, slash, colon, and hyphen consistently
 - fold Latin diacritics so `Müller` and `Muller` normalize together
 - retain Hebrew, Arabic, Cyrillic, CJK, and other non-Latin scripts
@@ -82,10 +82,10 @@ when no evidence record is relevant.
 The semantic lane runs through a replaceable semantic backend interface so retrieval quality can improve without changing ECITR schemas or authority boundaries.
 
 Semantic-only candidates must be qualified by the backend before fusion admits
-them. The heuristic backend qualifies exact normalized-token matches. Qdrant
-and LanceDB candidates remain unqualified unless an evaluated backend-specific
-score or distance boundary is configured. Lexical or metadata corroboration may
-still admit a candidate from those backends.
+them. The heuristic backend qualifies exact normalized-token matches. LanceDB
+candidates remain unqualified unless an evaluated backend-specific distance
+boundary is configured. Lexical or metadata corroboration may still admit a
+candidate from LanceDB.
 
 Parameter support records may enrich lexical, metadata, and semantic text for evidence, cases, and tactics. This enrichment does not change the retrieval request or response contracts.
 

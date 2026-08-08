@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 
 const { refreshCodexIndex, runStructuralCheck } = require("../src/importers/codex-refresh");
 
-test("codex refresh imports before sync and structural validation", async () => {
+test("codex refresh imports before structural validation", async () => {
   const calls = [];
   const catalogs = {
     tactics: [],
@@ -17,7 +17,6 @@ test("codex refresh imports before sync and structural validation", async () => 
   const summary = await refreshCodexIndex({
     codexRoot: "/tmp/.codex",
     catalogRoot: "/tmp/catalog",
-    skipQdrantSync: false,
     importRollouts(options) {
       calls.push({ step: "rollouts", dryRun: options.dryRun });
       return {
@@ -37,10 +36,6 @@ test("codex refresh imports before sync and structural validation", async () => 
       calls.push({ step: "loadCatalogs" });
       return catalogs;
     },
-    async syncCatalog(options) {
-      calls.push({ step: "sync", recreateCollection: options.recreateCollection });
-      return { points_upserted: 5 };
-    },
     structuralCheck({ importSummary }) {
       calls.push({ step: "structural" });
       return runStructuralCheck({ importSummary, catalogs });
@@ -50,13 +45,12 @@ test("codex refresh imports before sync and structural validation", async () => 
   assert.deepEqual(calls, [
     { step: "rollouts", dryRun: false },
     { step: "loadCatalogs" },
-    { step: "sync", recreateCollection: false },
     { step: "structural" },
   ]);
   assert.equal(summary.structural_checks.failed, 0);
 });
 
-test("codex refresh dry-run skips sync and structural validation", async () => {
+test("codex refresh dry-run skips structural validation", async () => {
   const calls = [];
 
   const summary = await refreshCodexIndex({
@@ -78,11 +72,10 @@ test("codex refresh dry-run skips sync and structural validation", async () => {
   });
 
   assert.deepEqual(calls, [{ step: "rollouts", dryRun: true }]);
-  assert.equal(summary.qdrant_sync.status, "skipped_dry_run");
   assert.equal(summary.structural_checks.status, "skipped_dry_run");
 });
 
-test("codex refresh can skip qdrant sync while still running structural validation", async () => {
+test("codex refresh runs structural validation without an external semantic service", async () => {
   const calls = [];
   const catalogs = {
     tactics: [],
@@ -98,7 +91,6 @@ test("codex refresh can skip qdrant sync while still running structural validati
   const summary = await refreshCodexIndex({
     codexRoot: "/tmp/.codex",
     catalogRoot: "/tmp/catalog",
-    skipQdrantSync: true,
     importRollouts() {
       calls.push({ step: "rollouts" });
       return {
@@ -118,9 +110,6 @@ test("codex refresh can skip qdrant sync while still running structural validati
       calls.push({ step: "loadCatalogs" });
       return catalogs;
     },
-    async syncCatalog() {
-      throw new Error("syncCatalog should not run when skipQdrantSync=true");
-    },
     structuralCheck({ importSummary }) {
       calls.push({ step: "structural" });
       return runStructuralCheck({ importSummary, catalogs });
@@ -132,7 +121,6 @@ test("codex refresh can skip qdrant sync while still running structural validati
     { step: "loadCatalogs" },
     { step: "structural" },
   ]);
-  assert.equal(summary.qdrant_sync.status, "skipped");
   assert.equal(summary.structural_checks.failed, 0);
 });
 

@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 
 const { refreshAgentOpsIndex } = require("../src/importers/agent-ops-refresh");
 
-test("agent-ops refresh runs imports before sync and smoke validation", async () => {
+test("agent-ops refresh runs imports before loading catalog counts", async () => {
   const calls = [];
   const catalogs = {
     tactics: [],
@@ -17,9 +17,6 @@ test("agent-ops refresh runs imports before sync and smoke validation", async ()
   const summary = await refreshAgentOpsIndex({
     agentOpsRoot: "/tmp/agent-ops",
     catalogRoot: "/tmp/catalog",
-    qdrantUrl: "http://127.0.0.1:6333",
-    collectionName: "ecitr-local-catalog-v1",
-    skipQdrantSync: false,
     importRuns(options) {
       calls.push({ step: "runs", dryRun: options.dryRun });
       return { errors: 0, conflicts: 0, imported: 2, skipped_existing: 3 };
@@ -32,28 +29,17 @@ test("agent-ops refresh runs imports before sync and smoke validation", async ()
       calls.push({ step: "loadCatalogs" });
       return catalogs;
     },
-    async syncCatalog(options) {
-      calls.push({ step: "sync", recreateCollection: options.recreateCollection });
-      return { points_upserted: 1 };
-    },
-    async smokeCheck() {
-      calls.push({ step: "smoke" });
-      return { passed: 3, failed: 0, scenarios: [] };
-    },
   });
 
   assert.deepEqual(calls, [
     { step: "runs", dryRun: false },
     { step: "sessions", dryRun: false },
     { step: "loadCatalogs" },
-    { step: "sync", recreateCollection: false },
-    { step: "smoke" },
   ]);
   assert.equal(summary.catalog_counts.evidence, 1);
-  assert.equal(summary.smoke_checks.failed, 0);
 });
 
-test("agent-ops refresh dry-run skips sync and smoke validation", async () => {
+test("agent-ops refresh dry-run skips catalog loading", async () => {
   const calls = [];
 
   const summary = await refreshAgentOpsIndex({
@@ -77,8 +63,7 @@ test("agent-ops refresh dry-run skips sync and smoke validation", async () => {
     { step: "runs", dryRun: true },
     { step: "sessions", dryRun: true },
   ]);
-  assert.equal(summary.qdrant_sync.status, "skipped_dry_run");
-  assert.equal(summary.smoke_checks.status, "skipped_dry_run");
+  assert.equal(summary.catalog_counts, undefined);
 });
 
 test("agent-ops refresh fails fast when an import summary reports conflicts", async () => {

@@ -55,12 +55,12 @@ test("support-graph query helpers return neighbors, shortest paths, and related 
   const pathResult = findShortestPath({
     snapshot,
     from: "tac_metadata_prune_before_vector_rank_001",
-    to: "paramdef_d69439bfc78f10ee3367",
+    to: "paramdef_97a187caebdaa015ed6b",
   });
   assert.deepEqual(pathResult.node_path, [
     "tactic:tac_metadata_prune_before_vector_rank_001",
-    "parameter_observation:paramobs_01041f2d5c6ded7a1520",
-    "parameter_definition:paramdef_d69439bfc78f10ee3367",
+    "parameter_observation:paramobs_a444b23ed67de1a02e77",
+    "parameter_definition:paramdef_97a187caebdaa015ed6b",
   ]);
 
   const related = expandRelated({

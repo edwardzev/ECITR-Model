@@ -24,7 +24,6 @@ const {
   DEFAULT_TABLE_NAME: DEFAULT_LANCEDB_TABLE_NAME,
   LanceDbSemanticBackend,
 } = require("../retrieval/semantic-backends/lancedb-backend");
-const { defaultSyncCatalog, DEFAULT_COLLECTION_NAME, DEFAULT_QDRANT_URL } = require("../importers/agent-ops-refresh");
 const { refreshSupportGraph } = require("../support-graph/refresh");
 
 const DEFAULT_INVARIANT_BENCHMARK_MANIFEST = path.join(
@@ -55,17 +54,12 @@ async function runGovernedPromotion({
   lancedbTableName = DEFAULT_LANCEDB_TABLE_NAME,
   lancedbEmbedderType = process.env.ECITR_LANCEDB_EMBEDDER ?? "hash",
   lancedbEmbeddingModel = process.env.ECITR_LANCEDB_EMBEDDING_MODEL,
-  qdrantUrl = DEFAULT_QDRANT_URL,
-  collectionName = DEFAULT_COLLECTION_NAME,
-  embedderType = process.env.ECITR_EMBEDDER ?? "openai",
-  embeddingModel = process.env.ECITR_EMBEDDING_MODEL,
   denseVectorSize,
   sparseBucketCount = 2048,
   openAIApiKey = process.env.OPENAI_API_KEY,
   openAIBaseUrl = process.env.OPENAI_BASE_URL,
   openAIOrganization = process.env.OPENAI_ORGANIZATION,
   openAIProject = process.env.OPENAI_PROJECT,
-  syncCatalog = defaultSyncCatalog,
   syncLanceDbCatalog = defaultSyncLanceDbCatalog,
   supportGraphRefresher = refreshSupportGraph,
   dryRun = false,
@@ -75,7 +69,6 @@ async function runGovernedPromotion({
   invariantActivationCap = DEFAULT_INVARIANT_ACTIVATION_CAP,
   tacticActivationCap = DEFAULT_TACTIC_ACTIVATION_CAP,
   skipLanceDbSync = false,
-  skipQdrantSync = true,
   caseBatchRunner = runCaseBatch,
   invariantBenchmarkRunner = runInvariantDiscoveryBenchmark,
   tacticBenchmarkRunner = runTacticDiscoveryBenchmark,
@@ -120,7 +113,6 @@ async function runGovernedPromotion({
     tactics: null,
     support_graph: null,
     lancedb_sync: null,
-    qdrant_sync: null,
     warnings: [],
   };
 
@@ -258,29 +250,6 @@ async function runGovernedPromotion({
       openAIBaseUrl,
       openAIOrganization,
       openAIProject,
-    });
-  }
-
-  if (skipQdrantSync || dryRun) {
-    report.qdrant_sync = {
-      status: dryRun ? "skipped_dry_run" : "skipped",
-      endpoint: qdrantUrl,
-      collection_name: collectionName,
-    };
-  } else {
-    report.qdrant_sync = await syncCatalog({
-      catalogs: loadCatalogsForDerivedSync(),
-      qdrantUrl,
-      collectionName,
-      embedderType,
-      embeddingModel,
-      denseVectorSize,
-      sparseBucketCount,
-      openAIApiKey,
-      openAIBaseUrl,
-      openAIOrganization,
-      openAIProject,
-      recreateCollection: false,
     });
   }
 

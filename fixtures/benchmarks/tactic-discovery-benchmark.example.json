@@ -4,12 +4,12 @@
   "evaluation_at": "2026-06-30T00:00:00Z",
   "entries": [
     {
-      "label": "approve_managed_qdrant_runtime",
+      "label": "approve_lancedb_derived_sync",
       "expected_decision": "approve",
-      "series_key": "qdrant.local-managed-runtime-and-sync",
-      "title": "Operate local Qdrant through the managed runtime and resync after backend changes",
-      "summary": "For the current ECITR semantic prototype, run Qdrant through the managed local helper and resync the derived index after backend changes.",
-      "action": "Run Qdrant through the managed local runtime helper, verify status serially, then resync the derived collection and rerun the semantic benchmark after backend or index-shape changes.",
+      "series_key": "lancedb.embedded-derived-sync",
+      "title": "Resync the embedded LanceDB index after semantic backend changes",
+      "summary": "For the current ECITR semantic backend, rebuild LanceDB from the canonical catalog after embedding or index-shape changes.",
+      "action": "Run the LanceDB catalog sync, verify the stored embedding signature and catalog basis, then rerun the semantic benchmark after backend or index-shape changes.",
       "source_case_refs": [
         "case_scope_filter_001",
         "case_scope_filter_002"
@@ -18,46 +18,44 @@
         "inv_scope_filter_before_rank_001"
       ],
       "tool_binding": [
-        "qdrant-local",
-        "sync-qdrant",
+        "lancedb:sync",
         "semantic-benchmark"
       ],
-      "tool_version_bounds": ">=1.17.1 <2.0.0",
+      "tool_version_bounds": ">=0.27.2 <1.0.0",
       "environment_bounds": [
         "local ECITR workspace",
         "derived semantic backend"
       ],
       "prerequisites": [
-        "Qdrant binary is installed under the managed local runtime path",
+        "The repository-owned LanceDB path is writable",
         "Canonical catalog exists before sync"
       ],
       "steps": [
-        "Start Qdrant through the managed runtime command",
-        "Wait for a serial healthy status check before issuing sync",
-        "Run the catalog sync against the derived collection",
+        "Run the LanceDB catalog sync against the repository-owned derived index",
+        "Verify the embedding signature and catalog basis recorded by the index",
         "Rerun the semantic benchmark after the sync completes"
       ],
       "fallbacks": [
-        "If the managed runtime cannot start, stop the process, inspect logs, and restart through the managed helper only"
+        "If sync fails, preserve the canonical catalog, inspect the derived index error, and rebuild the repository-owned LanceDB path"
       ],
       "rollback": [
-        "Stop the managed runtime",
-        "Revert the backend change before rerunning sync"
+        "Restore the previous derived LanceDB path",
+        "Revert the backend change before rebuilding"
       ],
       "revalidate_at": "2026-07-01T00:00:00Z",
       "validated_on": [
-        "qdrant-local 1.17.1",
-        "semantic-backend prototype"
+        "@lancedb/lancedb 0.27.2",
+        "embedded semantic backend"
       ],
       "confidence": 0.82
     },
     {
       "label": "block_mismatched_runtime_and_operator_surface",
       "expected_decision": "block",
-      "series_key": "mismatched.qdrant-and-operator-surface",
-      "title": "One tactic should cover both Qdrant runtime and morning review projection",
+      "series_key": "mismatched.lancedb-and-operator-surface",
+      "title": "One tactic should cover both LanceDB sync and morning review projection",
       "summary": "Deliberate mismatch across unrelated operational procedures.",
-      "action": "Start Qdrant locally and rebuild the morning review surface from persisted artifacts in one tactic.",
+      "action": "Rebuild LanceDB and rebuild the morning review surface from persisted artifacts in one tactic.",
       "source_case_refs": [
         "case_scope_filter_001",
         "case_scope_filter_002"
@@ -66,7 +64,7 @@
         "inv_scope_filter_before_rank_001"
       ],
       "tool_binding": [
-        "qdrant-local",
+        "lancedb:sync",
         "morning-review"
       ],
       "tool_version_bounds": ">=1.0.0 <2.0.0",

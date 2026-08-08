@@ -8,16 +8,15 @@ async function compareSemanticBackends({
   catalogs,
   candidateBackend = null,
   candidateLabel = "candidate",
-  qdrantBackend,
   heuristicBackend = new HeuristicSemanticBackend({ catalogs }),
   planner = new RetrievalPlanner(),
   now = new Date("2026-05-01T00:00:00Z"),
 }) {
-  const comparisonBackend = candidateBackend ?? qdrantBackend;
-  const comparisonLabel = candidateBackend ? candidateLabel : "qdrant";
-  if (!comparisonBackend) {
-    throw new Error("compareSemanticBackends requires a candidateBackend or qdrantBackend.");
+  if (!candidateBackend) {
+    throw new Error("compareSemanticBackends requires a candidateBackend.");
   }
+  const comparisonBackend = candidateBackend;
+  const comparisonLabel = candidateLabel;
 
   const report = [];
 

@@ -94,7 +94,7 @@ test("retrieval runtime can surface parameter-linked evidence, cases, and tactic
   const catalogs = buildExampleCatalog();
   const request = {
     request_id: "req_runtime_parameter_001",
-    query: "ECITR_QDRANT_URL",
+    query: "ECITR_LANCEDB_URI",
     workspace_id: "ecitr_model",
     project_scope: "project_family",
     intent: "analysis",
@@ -200,7 +200,7 @@ test("retrieval runtime excludes wrong-scope parameterized evidence and cases", 
 
   const request = {
     request_id: "req_runtime_parameter_scope_001",
-    query: "ECITR_QDRANT_URL",
+    query: "ECITR_LANCEDB_URI",
     workspace_id: "ecitr_model",
     project_scope: "project_family",
     intent: "analysis",
@@ -226,9 +226,9 @@ test("retrieval runtime can surface imported run evidence through payload-derive
   fs.writeFileSync(payloadPath, `${JSON.stringify({
     id: "run_test_001",
     project_id: "agent_ops",
-    objective: "Harden the ECITR local Qdrant operation path and rerun the semantic benchmark.",
+    objective: "Harden the ECITR embedded LanceDB index path and rerun the semantic benchmark.",
     findings: [
-      "The managed runtime is healthy on http://127.0.0.1:6333.",
+      "The derived index is healthy under the repository-owned LanceDB path.",
     ],
     next_actions: [
       "Rerun the managed benchmark after sync.",
@@ -255,7 +255,7 @@ test("retrieval runtime can surface imported run evidence through payload-derive
   const catalogs = catalog.loadRuntimeCatalogs();
   const request = {
     request_id: "req_runtime_payload_run_001",
-    query: "managed qdrant benchmark operation path",
+    query: "embedded lancedb benchmark index path",
     workspace_id: "ecitr_model",
     project_scope: "project",
     intent: "analysis",
@@ -304,9 +304,9 @@ test("retrieval runtime can surface imported session evidence through payload-de
   fs.writeFileSync(payloadPath, `${JSON.stringify({
     id: "session_test_001",
     project_id: "agent_ops",
-    query: "Harden the ECITR local Qdrant operation path and update docs.",
+    query: "Harden the ECITR embedded LanceDB index path and update docs.",
     status: "closed",
-    closure_notes: "Verified managed local Qdrant lifecycle commands and benchmark behavior.",
+    closure_notes: "Verified the embedded LanceDB sync and benchmark behavior.",
   }, null, 2)}\n`);
 
   catalog.writeRecord("evidence", {
@@ -329,7 +329,7 @@ test("retrieval runtime can surface imported session evidence through payload-de
   const catalogs = catalog.loadRuntimeCatalogs();
   const request = {
     request_id: "req_runtime_payload_session_001",
-    query: "verified managed local qdrant lifecycle benchmark behavior",
+    query: "verified embedded lancedb sync benchmark behavior",
     workspace_id: "ecitr_model",
     project_scope: "project",
     intent: "analysis",

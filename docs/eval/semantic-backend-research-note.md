@@ -4,6 +4,11 @@
 
 Capture the current recommendation for replacing `heuristic-semantic-v1` without changing ECITR contracts.
 
+This note retains the original candidate research as historical evaluation.
+The operational decision is now governed by
+[ADR 0012](../adr/0012-retire-qdrant-prototype.md): LanceDB is the sole
+supported derived semantic backend.
+
 ## Sources
 
 - Anthropic Contextual Retrieval: [anthropic.com/engineering/contextual-retrieval](https://www.anthropic.com/engineering/contextual-retrieval)
@@ -58,9 +63,13 @@ The cleanest near-term operational candidate is:
 - ECITR can still preserve catalog truth and project/workspace metadata filters before ranking.
 - Cohere reranking is explicitly positioned as a boost on top of existing retrieval systems rather than a replacement for them.
 
-## Alternative Candidate
+## Historical Alternative Assessment
 
-Qdrant remains credible when ECITR needs a daemonized hybrid dense+sparse service, concurrent multi-agent access, or payload-filter performance beyond the embedded local path.
+Qdrant was technically credible for a daemonized hybrid dense+sparse service,
+concurrent multi-agent access, or payload-filter performance beyond the
+embedded local path. ECITR did not develop an operational need for that service
+after the LanceDB path became active, so the prototype and its local runtime
+were retired rather than retained as dormant optional infrastructure.
 
 Weaviate is also credible when explainable hybrid scoring, named vectors, and managed search ergonomics are more important than keeping the indexing stack minimal.
 
@@ -84,11 +93,13 @@ generation. Vector-only candidates fail closed unless an evaluated
 backend-specific boundary is configured (`ECITR_LANCEDB_MAX_DISTANCE` for the
 local runtime) or another lane corroborates the record.
 
-The semantic benchmark now accepts `expected_results` and `forbidden_results`
+The LanceDB semantic benchmark accepts `expected_results` and `forbidden_results`
 per scenario and reports pass/fail quality in addition to backend overlap. The
 CLI exits non-zero when the candidate backend fails evaluated golden scenarios.
-Qdrant sync remains opt-in.
 
-ECITR also retains the Qdrant prototype in [qdrant-backend.js](../../src/retrieval/semantic-backends/qdrant-backend.js) as a comparison path.
+LanceDB is not canonical storage. It is derived from the file-backed catalog.
 
-Neither backend is canonical storage. Both are derived from the file-backed catalog.
+Reintroducing a daemon-backed semantic service requires a new ADR backed by a
+measured workload, explicit operational ownership, and a migration and rollback
+contract. Retirement is not a standing preference against such a service; it
+removes an unneeded current commitment.

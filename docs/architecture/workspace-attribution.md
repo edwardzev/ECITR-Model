@@ -68,5 +68,5 @@ catalog write.
 
 ## Derived State
 
-Support graph, LanceDB, and Qdrant state remain derived. Refresh them only after
-the canonical catalog migration is complete and validated.
+Support graph and LanceDB state remain derived. Refresh them only after the
+canonical catalog migration is complete and validated.

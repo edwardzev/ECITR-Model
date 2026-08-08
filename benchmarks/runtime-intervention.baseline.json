@@ -41,11 +41,11 @@
       "query": "scope filter ranking project retrieval",
       "project_scope": "project_family",
       "failure_kind": "module_not_found",
-      "failure_text": "Cannot find module ../qdrant-backend.js"
+      "failure_text": "Cannot find module ../semantic-backend.js"
     },
     "expected": {
       "retrieval_intent": "verification",
-      "query": "scope filter ranking project retrieval module not found cannot find module ../qdrant-backend.js",
+      "query": "scope filter ranking project retrieval module not found cannot find module ../semantic-backend.js",
       "weak_hit": false,
       "selected_results": {
         "tactics": [

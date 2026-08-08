@@ -49,35 +49,35 @@ test("refreshCases writes staged packets and draft cases from structured run evi
     immutable: true,
   });
   catalog.writeRecord("parameter_definition", {
-    definition_id: "paramdef_refresh_case_qdrant_url",
+    definition_id: "paramdef_97a187caebdaa015ed6b",
     workspace_id: "ecitr_model",
-    observed_key: "ECITR_QDRANT_URL",
-    normalized_key: "ecitr_qdrant_url",
+    observed_key: "ECITR_LANCEDB_URI",
+    normalized_key: "ecitr_lancedb_uri",
     value_type: "string",
     created_at: "2026-04-11T12:00:00.000Z",
     first_observed_at: "2026-04-11T12:00:00.000Z",
     first_source_evidence_ref: "ev_run_001",
   });
   catalog.writeRecord("parameter_observation", {
-    observation_id: "paramobs_d77a33807da294280c07",
-    definition_id: "paramdef_refresh_case_qdrant_url",
+    observation_id: "paramobs_69ffb089fa1fc0bbf752",
+    definition_id: "paramdef_97a187caebdaa015ed6b",
     workspace_id: "ecitr_model",
-    parameter_key: "ECITR_QDRANT_URL",
-    raw_value_text: "http://127.0.0.1:6333",
+    parameter_key: "ECITR_LANCEDB_URI",
+    raw_value_text: ".local/lancedb",
     value_type: "string",
-    value_json: "http://127.0.0.1:6333",
+    value_json: ".local/lancedb",
     observation_kind: "set",
     observed_at: "2026-04-11T12:00:00.000Z",
     project_scope: "project",
     source_evidence_refs: ["ev_run_001"],
     source_spans: [
       {
-        path: "config.qdrant.url",
+        path: "config.lancedb.uri",
         start_line: 1,
         end_line: 1,
         start_char: 0,
-        end_char: 21,
-        quote: "ECITR_QDRANT_URL=http://127.0.0.1:6333",
+        end_char: 32,
+        quote: "ECITR_LANCEDB_URI=.local/lancedb",
       },
     ],
     strategy_id: "parameter-distiller-file-v1",
@@ -101,7 +101,7 @@ test("refreshCases writes staged packets and draft cases from structured run evi
   assert.equal(draftCase.status, "draft");
   assert.equal(draftCase.review_state, "draft");
   assert.equal(draftCase.workspace_id, "ecitr_model");
-  assert.deepEqual(draftCase.parameter_observation_refs, ["paramobs_d77a33807da294280c07"]);
+  assert.deepEqual(draftCase.parameter_observation_refs, ["paramobs_69ffb089fa1fc0bbf752"]);
   assert.match(draftCase.problem_statement, /autonomous cases pipeline/);
   assert.ok(draftCase.open_questions.some((value) => value.includes("applicability.when_to_apply")));
 });

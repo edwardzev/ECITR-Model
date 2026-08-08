@@ -30,15 +30,14 @@ does not match the default local index, project memory falls back to the
 file-backed heuristic semantic backend.
 
 Nearest-neighbor presence is not relevance proof. Until a backend-specific
-threshold is calibrated by golden retrieval scenarios, vector-only LanceDB or
-Qdrant candidates fail closed unless lexical or metadata lanes corroborate
-them.
+threshold is calibrated by golden retrieval scenarios, vector-only LanceDB
+candidates fail closed unless lexical or metadata lanes corroborate them.
 
 This does not change the control-plane contract:
 - the catalog remains canonical
 - LanceDB remains a derived index
 - invocation artifacts are still written for auditability
-- Qdrant remains an explicit comparison or opt-in backend
+- LanceDB is the only supported derived semantic backend
 
 ## Shadow Retrieval Gate
 

@@ -2,7 +2,7 @@
   {
     "scenario_id": "gate_memory_prior_decision_001",
     "category": "direct_memory_dependency",
-    "query": "What did we decide about the Qdrant indexing boundary?",
+    "query": "What did we decide about the derived semantic indexing boundary?",
     "intent": "analysis",
     "trigger": "discretionary",
     "expected": { "proposed_decision": "retrieve", "decision": "retrieve", "critical": true, "query_useful": true }

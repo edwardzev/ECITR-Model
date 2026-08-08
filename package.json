@@ -37,13 +37,7 @@
     "benchmark:tactics": "node src/cli/benchmark-tactics.js",
     "review:tactics": "node src/cli/review-tactics.js",
     "refresh:codex:launchd": "node src/cli/codex-refresh-launchd.js",
-    "qdrant:local": "node src/cli/qdrant-local.js",
-    "qdrant:install": "node src/cli/qdrant-local.js install",
-    "qdrant:start": "node src/cli/qdrant-local.js start",
-    "qdrant:stop": "node src/cli/qdrant-local.js stop",
-    "qdrant:status": "node src/cli/qdrant-local.js status",
     "query:support-graph": "node src/cli/query-support-graph.js",
-    "qdrant:sync": "node src/cli/sync-qdrant.js",
     "benchmark:semantic": "node src/cli/benchmark-semantic.js",
     "benchmark:retrieval-improvements": "node src/cli/benchmark-retrieval-improvements.js"
   },

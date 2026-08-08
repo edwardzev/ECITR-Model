@@ -11,7 +11,6 @@ const { DEFAULT_CATALOG_ROOT } = require("../cases/case-refresh");
 const {
   DEFAULT_TABLE_NAME: DEFAULT_LANCEDB_TABLE_NAME,
 } = require("../retrieval/semantic-backends/lancedb-backend");
-const { DEFAULT_COLLECTION_NAME, DEFAULT_QDRANT_URL } = require("../importers/agent-ops-refresh");
 const {
   DEFAULT_INVARIANT_ACTIVATION_CAP,
   DEFAULT_TACTIC_ACTIVATION_CAP,
@@ -36,8 +35,6 @@ function parseArgs(args) {
     lancedbTableName: process.env.ECITR_LANCEDB_TABLE ?? DEFAULT_LANCEDB_TABLE_NAME,
     lancedbEmbedderType: process.env.ECITR_LANCEDB_EMBEDDER ?? "hash",
     lancedbEmbeddingModel: process.env.ECITR_LANCEDB_EMBEDDING_MODEL,
-    qdrantUrl: DEFAULT_QDRANT_URL,
-    collectionName: DEFAULT_COLLECTION_NAME,
     dryRun: false,
     enableLivePromotions: true,
     maxLiveInvariantCandidates: 25,
@@ -45,7 +42,6 @@ function parseArgs(args) {
     invariantActivationCap: DEFAULT_INVARIANT_ACTIVATION_CAP,
     tacticActivationCap: DEFAULT_TACTIC_ACTIVATION_CAP,
     skipLanceDbSync: false,
-    skipQdrantSync: true,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -87,12 +83,6 @@ function parseArgs(args) {
       case "--skip-lancedb-sync":
         options.skipLanceDbSync = true;
         break;
-      case "--qdrant-url":
-        options.qdrantUrl = args[++index];
-        break;
-      case "--collection":
-        options.collectionName = args[++index];
-        break;
       case "--dry-run":
         options.dryRun = true;
         break;
@@ -110,12 +100,6 @@ function parseArgs(args) {
         break;
       case "--tactic-activation-cap":
         options.tacticActivationCap = Number.parseInt(args[++index], 10);
-        break;
-      case "--skip-qdrant-sync":
-        options.skipQdrantSync = true;
-        break;
-      case "--sync-qdrant":
-        options.skipQdrantSync = false;
         break;
       default:
         throw new Error(`Unknown argument: ${arg}`);
