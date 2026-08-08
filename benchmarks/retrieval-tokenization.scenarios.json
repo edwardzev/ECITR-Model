@@ -1,0 +1,163 @@
+[
+  {
+    "scenario_id": "token_punctuation_memory_validation_001",
+    "category": "punctuation",
+    "query": "memory-validation?",
+    "candidates": [
+      { "candidate_id": "expected", "text": "memory validation protocol" },
+      { "candidate_id": "noise", "text": "memory usage report" }
+    ],
+    "expected_ids": ["expected"]
+  },
+  {
+    "scenario_id": "token_hyphen_no_write_001",
+    "category": "hyphen",
+    "query": "no-write?",
+    "candidates": [
+      { "candidate_id": "expected", "text": "strict no write audit" },
+      { "candidate_id": "noise", "text": "write migration output" }
+    ],
+    "expected_ids": ["expected"]
+  },
+  {
+    "scenario_id": "token_slash_release_rollback_001",
+    "category": "slash",
+    "query": "release/rollback",
+    "candidates": [
+      { "candidate_id": "expected", "text": "release rollback contract" },
+      { "candidate_id": "noise", "text": "release notes" }
+    ],
+    "expected_ids": ["expected"]
+  },
+  {
+    "scenario_id": "token_colon_invoice_attachment_001",
+    "category": "punctuation",
+    "query": "invoice:attachment",
+    "candidates": [
+      { "candidate_id": "expected", "text": "invoice attachment lineage" },
+      { "candidate_id": "noise", "text": "invoice posting" }
+    ],
+    "expected_ids": ["expected"]
+  },
+  {
+    "scenario_id": "token_diacritic_muller_001",
+    "category": "latin_diacritic",
+    "query": "Müller?",
+    "candidates": [
+      { "candidate_id": "expected", "text": "Muller supplier record" },
+      { "candidate_id": "noise", "text": "Miller supplier record" }
+    ],
+    "expected_ids": ["expected"]
+  },
+  {
+    "scenario_id": "token_combining_cafe_001",
+    "category": "latin_diacritic",
+    "query": "Café",
+    "candidates": [
+      { "candidate_id": "expected", "text": "cafe branding case" },
+      { "candidate_id": "noise", "text": "coffee branding case" }
+    ],
+    "expected_ids": ["expected"]
+  },
+  {
+    "scenario_id": "token_hebrew_001",
+    "category": "hebrew",
+    "query": "בדיקת זיכרון",
+    "candidates": [
+      { "candidate_id": "expected", "text": "נוהל בדיקת זיכרון לפרויקט" },
+      { "candidate_id": "noise", "text": "בדיקת מלאי" }
+    ],
+    "expected_ids": ["expected"]
+  },
+  {
+    "scenario_id": "token_hebrew_marks_001",
+    "category": "hebrew",
+    "query": "שָׁלוֹם",
+    "candidates": [
+      { "candidate_id": "expected", "text": "שָׁלוֹם עולם" },
+      { "candidate_id": "noise", "text": "עולם חדש" }
+    ],
+    "expected_ids": ["expected"]
+  },
+  {
+    "scenario_id": "token_arabic_001",
+    "category": "arabic",
+    "query": "ذاكرة المشروع",
+    "candidates": [
+      { "candidate_id": "expected", "text": "سياسة ذاكرة المشروع" },
+      { "candidate_id": "noise", "text": "سياسة المخزون" }
+    ],
+    "expected_ids": ["expected"]
+  },
+  {
+    "scenario_id": "token_cyrillic_001",
+    "category": "cyrillic",
+    "query": "память-проекта",
+    "candidates": [
+      { "candidate_id": "expected", "text": "память проекта" },
+      { "candidate_id": "noise", "text": "история проекта" }
+    ],
+    "expected_ids": ["expected"]
+  },
+  {
+    "scenario_id": "token_cjk_001",
+    "category": "cjk",
+    "query": "项目记忆",
+    "candidates": [
+      { "candidate_id": "expected", "text": "项目记忆" },
+      { "candidate_id": "noise", "text": "项目库存" }
+    ],
+    "expected_ids": ["expected"]
+  },
+  {
+    "scenario_id": "token_identifier_qdrant_001",
+    "category": "exact_identifier",
+    "query": "ECITR_QDRANT_URL",
+    "candidates": [
+      { "candidate_id": "expected", "text": "ECITR_QDRANT_URL" },
+      { "candidate_id": "noise", "text": "ECITR QDRANT endpoint" }
+    ],
+    "expected_ids": ["expected"]
+  },
+  {
+    "scenario_id": "token_identifier_tactic_001",
+    "category": "exact_identifier",
+    "query": "tac_metadata_prune_before_vector_rank_001",
+    "candidates": [
+      { "candidate_id": "expected", "text": "tac_metadata_prune_before_vector_rank_001" },
+      { "candidate_id": "noise", "text": "metadata prune before vector rank" }
+    ],
+    "expected_ids": ["expected"]
+  },
+  {
+    "scenario_id": "token_stopwords_negative_001",
+    "category": "stop_words",
+    "query": "how should the",
+    "candidates": [
+      { "candidate_id": "noise", "text": "the system should remain available" },
+      { "candidate_id": "noise_2", "text": "how the workflow runs" }
+    ],
+    "expected_ids": [],
+    "forbidden_ids": ["noise", "noise_2"]
+  },
+  {
+    "scenario_id": "token_negation_preserved_001",
+    "category": "negation",
+    "query": "not available",
+    "candidates": [
+      { "candidate_id": "expected", "text": "service is not available" },
+      { "candidate_id": "noise", "text": "service available" }
+    ],
+    "expected_ids": ["expected"]
+  },
+  {
+    "scenario_id": "token_numeric_identifier_001",
+    "category": "exact_identifier",
+    "query": "Q-105724",
+    "candidates": [
+      { "candidate_id": "expected", "text": "quote Q 105724" },
+      { "candidate_id": "noise", "text": "quote Q 105700" }
+    ],
+    "expected_ids": ["expected"]
+  }
+]

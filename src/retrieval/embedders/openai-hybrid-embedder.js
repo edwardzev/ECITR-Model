@@ -1,4 +1,5 @@
 const { tokenize, buildSparseVector } = require("./hash-embedder");
+const { RETRIEVAL_TOKENIZER_ID } = require("../tokenizer");
 
 const DEFAULT_MODEL = "text-embedding-3-small";
 const DEFAULT_TIMEOUT_MS = 30000;
@@ -57,7 +58,7 @@ class OpenAIHybridSemanticEmbedder {
     this.batchSize = batchSize;
     this.organization = organization;
     this.project = project;
-    this.embeddingSignature = `openai:${model}:${resolvedDenseVectorSize}:${sparseBucketCount}`;
+    this.embeddingSignature = `openai:${model}:${resolvedDenseVectorSize}:sparse-${RETRIEVAL_TOKENIZER_ID}:${sparseBucketCount}`;
   }
 
   async embedDocuments({ documents }) {

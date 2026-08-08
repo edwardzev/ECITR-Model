@@ -1,12 +1,13 @@
 const { SemanticRetrievalBackend } = require("../semantic-backend-interface");
 const { buildEvidenceRetrievalText } = require("../evidence-text");
+const { tokenizeRetrievalText } = require("../tokenizer");
 const { buildParameterIndexes, buildParameterSummaryForRecord } = require("../../parameters/retrieval");
 
 class HeuristicSemanticBackend extends SemanticRetrievalBackend {
   constructor({ catalogs }) {
     super({
-      backendId: "heuristic-semantic-v1",
-      capabilities: ["token-normalization", "atomic-claim-support", "soft-overlap"],
+      backendId: "heuristic-semantic-v2",
+      capabilities: ["unicode-token-normalization", "atomic-claim-support", "soft-overlap"],
     });
 
     this.catalogs = catalogs;
@@ -121,15 +122,8 @@ function getSemanticText(layer, record, atomicClaimsByEvidence, parameterIndexes
 }
 
 function semanticTokens(value) {
-  return tokenize(value)
+  return tokenizeRetrievalText(value)
     .map(normalizeSemanticToken)
-    .filter((token) => token && !STOP_WORDS.has(token));
-}
-
-function tokenize(value) {
-  return String(value)
-    .toLowerCase()
-    .split(/[^a-z0-9_:-]+/i)
     .filter(Boolean);
 }
 
@@ -182,8 +176,6 @@ function normalizeSemanticToken(token) {
 
   return token;
 }
-
-const STOP_WORDS = new Set(["the", "a", "an", "and", "or", "to", "for", "from", "of", "how", "should"]);
 
 const SEMANTIC_SYNONYMS = Object.freeze({
   unrelated: "scope",

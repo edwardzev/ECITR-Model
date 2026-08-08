@@ -2,6 +2,7 @@ const { RetrievalLane } = require("./lane-interface");
 const { assertSemanticRetrievalBackend } = require("./semantic-backend-interface");
 const { HeuristicSemanticBackend } = require("./semantic-backends/heuristic-backend");
 const { buildEvidenceRetrievalText } = require("./evidence-text");
+const { tokenizeRetrievalText } = require("./tokenizer");
 const { buildParameterIndexes, buildParameterSummaryForRecord } = require("../parameters/retrieval");
 
 class LexicalLane extends RetrievalLane {
@@ -15,7 +16,7 @@ class LexicalLane extends RetrievalLane {
   }
 
   async execute({ request, plan }) {
-    const queryTokens = tokenize(request.query);
+    const queryTokens = tokenizeRetrievalText(request.query);
     const candidates = [];
 
     for (const layer of plan.allowed_layers) {
@@ -27,7 +28,7 @@ class LexicalLane extends RetrievalLane {
           catalogRoot: this.catalogs?.__catalogRoot,
           parameterIndexes: this.parameterIndexes,
         });
-        const score = scoreTokenOverlap(queryTokens, tokenize(haystack));
+        const score = scoreTokenOverlap(queryTokens, tokenizeRetrievalText(haystack));
         if (score <= 0) {
           continue;
         }
@@ -51,7 +52,7 @@ class MetadataLane extends RetrievalLane {
   }
 
   async execute({ request, plan }) {
-    const queryTokens = tokenize(request.query);
+    const queryTokens = tokenizeRetrievalText(request.query);
     const candidates = [];
 
     for (const layer of plan.allowed_layers) {
@@ -60,7 +61,7 @@ class MetadataLane extends RetrievalLane {
           continue;
         }
         const metadata = getMetadataText(layer, record, this.parameterIndexes);
-        const score = scoreTokenOverlap(queryTokens, tokenize(metadata));
+        const score = scoreTokenOverlap(queryTokens, tokenizeRetrievalText(metadata));
         if (score <= 0) {
           continue;
         }
@@ -99,7 +100,7 @@ class TemporalLane extends RetrievalLane {
 
   async execute({ request, plan, now }) {
     const candidates = [];
-    const queryTokens = tokenize(request.query);
+    const queryTokens = tokenizeRetrievalText(request.query);
     const recencySensitive =
       plan.freshness_mode === "strict" ||
       /\brecent\b|\blatest\b|\bcurrent\b|\bnew\b|\btoday\b/.test(String(request.query).toLowerCase()) ||
@@ -117,7 +118,7 @@ class TemporalLane extends RetrievalLane {
         const searchText = getSearchText(layer, record, {
           catalogRoot: this.catalogs?.__catalogRoot,
         });
-        const overlapScore = scoreTokenOverlap(queryTokens, tokenize(searchText));
+        const overlapScore = scoreTokenOverlap(queryTokens, tokenizeRetrievalText(searchText));
         if (overlapScore <= 0) {
           continue;
         }
@@ -254,13 +255,6 @@ function getPrimaryTimestamp(layer, record) {
     default:
       return null;
   }
-}
-
-function tokenize(value) {
-  return String(value)
-    .toLowerCase()
-    .split(/[^a-z0-9_:-]+/i)
-    .filter(Boolean);
 }
 
 function scoreTokenOverlap(queryTokens, haystackTokens) {

@@ -1,0 +1,182 @@
+[
+  {
+    "scenario_id": "gate_memory_prior_decision_001",
+    "category": "direct_memory_dependency",
+    "query": "What did we decide about the Qdrant indexing boundary?",
+    "intent": "analysis",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "retrieve", "decision": "retrieve", "critical": true, "query_useful": true }
+  },
+  {
+    "scenario_id": "gate_memory_continue_001",
+    "category": "direct_memory_dependency",
+    "query": "Continue the retrieval normalization work from the previous task.",
+    "intent": "action",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "retrieve", "decision": "retrieve", "critical": true, "query_useful": true }
+  },
+  {
+    "scenario_id": "gate_memory_case_lookup_001",
+    "category": "direct_memory_dependency",
+    "query": "Do we have a prior case for invoice attachment lineage?",
+    "intent": "analysis",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "retrieve", "decision": "retrieve", "critical": true, "query_useful": true }
+  },
+  {
+    "scenario_id": "gate_memory_vague_001",
+    "category": "direct_memory_dependency",
+    "query": "What did we decide?",
+    "intent": "analysis",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "retrieve", "decision": "retrieve", "critical": true, "query_useful": false }
+  },
+  {
+    "scenario_id": "gate_general_memory_definition_001",
+    "category": "general_knowledge",
+    "query": "What is computer memory?",
+    "intent": "analysis",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "skip", "decision": "skip", "critical": false, "query_useful": false }
+  },
+  {
+    "scenario_id": "gate_general_photosynthesis_001",
+    "category": "general_knowledge",
+    "query": "Define photosynthesis.",
+    "intent": "analysis",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "skip", "decision": "skip", "critical": false, "query_useful": false }
+  },
+  {
+    "scenario_id": "gate_general_person_001",
+    "category": "general_knowledge",
+    "query": "Who is Ada Lovelace?",
+    "intent": "analysis",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "skip", "decision": "skip", "critical": false, "query_useful": false }
+  },
+  {
+    "scenario_id": "gate_current_paragraph_001",
+    "category": "current_thread_only",
+    "query": "Summarize the paragraph above.",
+    "intent": "analysis",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "skip", "decision": "skip", "critical": false, "query_useful": false }
+  },
+  {
+    "scenario_id": "gate_current_sentence_001",
+    "category": "current_thread_only",
+    "query": "Rewrite the sentence you just wrote.",
+    "intent": "action",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "skip", "decision": "skip", "critical": false, "query_useful": false }
+  },
+  {
+    "scenario_id": "gate_current_message_001",
+    "category": "current_thread_only",
+    "query": "Does this message mention a deadline?",
+    "intent": "analysis",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "skip", "decision": "skip", "critical": false, "query_useful": false }
+  },
+  {
+    "scenario_id": "gate_no_answer_prior_001",
+    "category": "memory_may_have_no_answer",
+    "query": "Do we have any prior decision about multilingual retrieval?",
+    "intent": "analysis",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "retrieve", "decision": "retrieve", "critical": true, "query_useful": true }
+  },
+  {
+    "scenario_id": "gate_no_answer_contains_001",
+    "category": "memory_may_have_no_answer",
+    "query": "Check whether project memory contains a case for an unknown supplier mapping.",
+    "intent": "verification",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "retrieve", "decision": "retrieve", "critical": true, "query_useful": true }
+  },
+  {
+    "scenario_id": "gate_no_answer_rollback_001",
+    "category": "memory_may_have_no_answer",
+    "query": "Have we ever documented a rollback for the LanceDB index?",
+    "intent": "analysis",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "retrieve", "decision": "retrieve", "critical": true, "query_useful": true }
+  },
+  {
+    "scenario_id": "gate_audit_release_001",
+    "category": "audit_verification",
+    "query": "Audit the prior retrieval release against its evidence.",
+    "intent": "audit",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "retrieve", "decision": "retrieve", "critical": true, "query_useful": true }
+  },
+  {
+    "scenario_id": "gate_verify_migration_001",
+    "category": "audit_verification",
+    "query": "Verify whether the last workspace migration preserved lineage.",
+    "intent": "verification",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "retrieve", "decision": "retrieve", "critical": true, "query_useful": true }
+  },
+  {
+    "scenario_id": "gate_audit_evidence_001",
+    "category": "audit_verification",
+    "query": "Show evidence for our previous workspace attribution decision.",
+    "intent": "audit",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "retrieve", "decision": "retrieve", "critical": true, "query_useful": true }
+  },
+  {
+    "scenario_id": "gate_msbc_preflight_override_001",
+    "category": "msbc_mandatory_retrieval",
+    "query": "What is Business Central?",
+    "intent": "analysis",
+    "trigger": "preflight",
+    "project_config": { "preflight_retrieval_mandatory": true, "failure_retry_retrieval_mandatory": false },
+    "expected": { "proposed_decision": "skip", "decision": "retrieve", "critical": true, "mandatory": true, "mandatory_override": true, "query_useful": false }
+  },
+  {
+    "scenario_id": "gate_msbc_failure_override_001",
+    "category": "msbc_mandatory_retrieval",
+    "query": "Rewrite the sentence you just wrote.",
+    "intent": "action",
+    "trigger": "failure_retry",
+    "project_config": { "preflight_retrieval_mandatory": false, "failure_retry_retrieval_mandatory": true },
+    "expected": { "proposed_decision": "skip", "decision": "retrieve", "critical": true, "mandatory": true, "mandatory_override": true, "query_useful": false }
+  },
+  {
+    "scenario_id": "gate_msbc_arithmetic_override_001",
+    "category": "msbc_mandatory_retrieval",
+    "query": "What is 2 plus 2?",
+    "intent": "analysis",
+    "trigger": "preflight",
+    "project_config": { "preflight_retrieval_mandatory": true, "failure_retry_retrieval_mandatory": false },
+    "expected": { "proposed_decision": "skip", "decision": "retrieve", "critical": true, "mandatory": true, "mandatory_override": true, "query_useful": false }
+  },
+  {
+    "scenario_id": "gate_nonmandatory_preflight_001",
+    "category": "nonmandatory_policy",
+    "query": "What is Business Central?",
+    "intent": "analysis",
+    "trigger": "preflight",
+    "project_config": { "preflight_retrieval_mandatory": false, "failure_retry_retrieval_mandatory": false },
+    "expected": { "proposed_decision": "skip", "decision": "skip", "critical": false, "query_useful": false }
+  },
+  {
+    "scenario_id": "gate_ambiguous_help_001",
+    "category": "ambiguous_negative",
+    "query": "Help me improve this.",
+    "intent": "action",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "skip", "decision": "skip", "critical": false, "query_useful": false }
+  },
+  {
+    "scenario_id": "gate_ambiguous_plan_001",
+    "category": "ambiguous_negative",
+    "query": "Plan the next step.",
+    "intent": "action",
+    "trigger": "discretionary",
+    "expected": { "proposed_decision": "skip", "decision": "skip", "critical": false, "query_useful": false }
+  }
+]

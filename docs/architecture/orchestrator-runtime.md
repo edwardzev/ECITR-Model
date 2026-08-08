@@ -47,6 +47,8 @@ Current phase rule:
 - normal task execution does not force retrieval when both mandatory flags are false
 - the execution loop exposes a first-class discretionary affordance through `search_project_memory`
 - usage can be recorded later through `record_memory_usage`
+- an already-requested retrieval receives an observational shadow-gate result
+  that cannot suppress execution
 
 Repo-local or harness integrations can use the concrete CLI surfaces:
 - `npm run memory:log-opportunity -- --task-id ... --task-title ...`
@@ -68,8 +70,10 @@ The execution loop should expose:
 - the workspace identity that retrieval will use
 - the default scope and policy flags
 - a per-run memory invocation artifact summary
+- the shadow gate classification when retrieval was executed
 
-Memory invocation artifacts remain derived `.local` files rather than canonical records.
+Memory invocation artifacts, including shadow gate results, remain derived
+`.local` files rather than canonical records.
 
 ## Role Rule
 
