@@ -56,7 +56,6 @@ test("governed promotion promotes approved benchmark candidates and skips active
     catalogRoot: rootDir,
     reportDir,
     dryRun: false,
-    skipQdrantSync: true,
     caseBatchRunner() {
       return {
         batch_id: "batch-999",
@@ -84,7 +83,6 @@ test("governed promotion promotes approved benchmark candidates and skips active
   assert.equal(result.invariants.skipped_count, 1);
   assert.equal(result.invariants.promoted[0].proposed_id, "inv_promote_me");
   assert.equal(result.invariants.skipped[0].proposed_id, "inv_already_live");
-  assert.equal(result.qdrant_sync.status, "skipped");
   assert.ok(result.output_path);
   assert.ok(fs.existsSync(result.output_path));
 });
@@ -106,7 +104,6 @@ test("governed promotion blocks when a benchmark is not clean", async () => {
       catalogRoot: rootDir,
       reportDir: path.join(rootDir, "reports"),
       dryRun: true,
-      skipQdrantSync: true,
       caseBatchRunner() {
         caseBatchCalled = true;
         return { batch_id: "batch-999", total_cases: 0, approved: 0, errors: 0, results: [] };
@@ -158,7 +155,6 @@ test("governed promotion stages and processes live candidates alongside benchmar
     reportDir,
     dryRun: false,
     skipLanceDbSync: true,
-    skipQdrantSync: true,
     caseBatchRunner() {
       events.push("cases");
       return {
@@ -260,7 +256,6 @@ test("governed promotion report makes invariant and tactic counts independent", 
     reportDir,
     dryRun: false,
     skipLanceDbSync: true,
-    skipQdrantSync: true,
     caseBatchRunner() {
       return {
         batch_id: "batch-independent-counts",
@@ -361,7 +356,6 @@ test("governed promotion isolates default support graph output for non-default c
     reportDir,
     dryRun: false,
     skipLanceDbSync: true,
-    skipQdrantSync: true,
     caseBatchRunner() {
       return {
         batch_id: "batch-isolated-graph",
@@ -467,7 +461,7 @@ test("candidate promotion helper records blocked promotions without aborting the
   assert.equal(result.blocked[0].proposed_id, "tac_bad");
 });
 
-test("governed promotion refreshes the support graph before downstream sync", async () => {
+test("governed promotion refreshes the support graph before LanceDB sync", async () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-governed-promotion-"));
   const manifestPath = path.join(rootDir, "empty.json");
   const events = [];
@@ -483,7 +477,6 @@ test("governed promotion refreshes the support graph before downstream sync", as
     reportDir: path.join(rootDir, "reports"),
     supportGraphRoot: path.join(rootDir, "support-graph"),
     dryRun: false,
-    skipQdrantSync: false,
     caseBatchRunner() {
       return {
         batch_id: "batch-graph-order",
@@ -524,15 +517,9 @@ test("governed promotion refreshes the support graph before downstream sync", as
         status: "synced",
       };
     },
-    syncCatalog() {
-      events.push("qdrant");
-      return {
-        status: "synced",
-      };
-    },
   });
 
-  assert.deepEqual(events, ["graph", "lancedb", "qdrant"]);
+  assert.deepEqual(events, ["graph", "lancedb"]);
   assert.equal(result.support_graph.status, "updated");
   assert.equal(result.lancedb_sync.status, "synced");
 });

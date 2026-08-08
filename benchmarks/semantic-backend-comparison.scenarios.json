@@ -48,7 +48,7 @@
     "scenario_id": "semantic_compare_parameter_001",
     "request": {
       "request_id": "req_semantic_compare_004",
-      "query": "ECITR_QDRANT_URL",
+      "query": "ECITR_LANCEDB_URI",
       "project_scope": "project_family",
       "intent": "analysis"
     },

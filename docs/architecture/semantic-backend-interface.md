@@ -15,9 +15,9 @@ The semantic backend may score or retrieve candidates, but it does not own:
 - layer budgets
 - authority decisions
 
-## Current Runtime
+## File-Backed Fallback
 
-The current backend is `heuristic-semantic-v2`.
+The file-backed fallback backend is `heuristic-semantic-v2`.
 
 It uses:
 - the shared Unicode-aware `unicode-v2` retrieval tokenizer
@@ -25,30 +25,14 @@ It uses:
 - atomic-claim support for evidence text
 - soft overlap scoring
 
-This backend is intentionally simple and local.
+This backend is intentionally simple and local. It remains available when the
+derived LanceDB table is missing or incompatible with the current catalog and
+embedding signature.
 
-## Prototype Backends
+## Supported Derived Backend
 
-The first stronger prototype backend was `qdrant-hybrid-prototype-v1`.
-
-It is still a derived backend.
-
-It:
-- exports persisted ECITR records into contextual index documents
-- derives deterministic UUID point IDs from ECITR layer and canonical record ID
-- stores canonical metadata as payload
-- runs dense+sparse hybrid queries
-- returns payload-backed candidates to the semantic lane
-
-It does not:
-- replace the file-backed catalog
-- change retrieval request or response schemas
-- become canonical storage
-
-Qdrant is now treated as an optional comparison backend, not the default
-operational direction.
-
-The current local candidate backend is `lancedb-local-semantic-v1`.
+The sole supported derived semantic backend is
+`lancedb-local-semantic-v1`.
 
 It:
 - consumes the shared contextual semantic export and writes LanceDB rows
@@ -69,9 +53,14 @@ It does not:
 - change retrieval request or response schemas
 - become canonical storage
 
-## Required Future Capabilities
+The earlier daemon-backed prototype is retired under
+[ADR 0012](../adr/0012-retire-qdrant-prototype.md). Historical worklogs remain
+as evidence of that experiment, but the prototype is not a supported runtime,
+comparison path, CLI surface, or refresh target.
 
-The next stronger backend should support:
+## Future Evolution Criteria
+
+Any future semantic backend change should preserve or improve:
 - dense and sparse retrieval or equivalent hybrid retrieval
 - metadata filtering before final ranking
 - batch candidate retrieval per allowed layer
@@ -115,7 +104,9 @@ another retrieval lane independently corroborates the record.
 
 ## Current Recommendation
 
-The next stronger backend should be a hybrid semantic index over persisted ECITR records, not a replacement for the file-backed catalog.
+Use LanceDB as the embedded derived semantic index over persisted ECITR records.
+Introducing another engine requires a new measured retrieval-class decision; it
+must not be restored as an ungoverned dormant prototype.
 
 The catalog remains the source of truth.
 The semantic backend remains a derived index.

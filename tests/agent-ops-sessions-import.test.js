@@ -203,7 +203,7 @@ function createImportFixture() {
     resolution_mode: "cwd",
     requested_cwd: "/Users/edwardzev/agent-ops",
     resolved_workspace_root: "/Users/edwardzev/agent-ops",
-    query: "Harden the ECITR local Qdrant operation path.",
+    query: "Harden the ECITR embedded LanceDB index path.",
     status: "closed",
     started_by: "codex_desktop",
     context_bundle_ref: "memory/sessions/2026/04/context_session_20260410172725640_nrq7b6.json",
@@ -211,7 +211,7 @@ function createImportFixture() {
     run_ref: "memory/runs/2026/04/run_20260410173434_mcp.json",
     closed_at: "2026-04-10T17:34:34.211Z",
     closed_by: "codex",
-    closure_notes: "Completed the qdrant hardening flow.",
+    closure_notes: "Completed the LanceDB index hardening flow.",
   });
   writeJson(abandonedSessionPath, {
     id: "session_20260403181313556_3egyzr",

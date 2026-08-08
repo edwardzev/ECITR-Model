@@ -17,22 +17,22 @@ test("workspace backfill stamps workspace ids and rewrites parameter ids plus pa
   const evidence = loadExample("evidence");
   const parameterDefinition = {
     ...loadExample("parameter_definition"),
-    definition_id: "paramdef_legacy_qdrant",
+    definition_id: "paramdef_legacy_parameter",
   };
   const parameterObservation = {
     ...loadExample("parameter_observation"),
-    observation_id: "paramobs_legacy_qdrant",
-    definition_id: "paramdef_legacy_qdrant",
+    observation_id: "paramobs_legacy_parameter",
+    definition_id: "paramdef_legacy_parameter",
   };
   const caseRecord = {
     ...loadExample("case"),
     workspace_id: undefined,
-    parameter_observation_refs: ["paramobs_legacy_qdrant"],
+    parameter_observation_refs: ["paramobs_legacy_parameter"],
   };
   const tacticRecord = {
     ...loadExample("tactic"),
     workspace_id: undefined,
-    parameter_observation_refs: ["paramobs_legacy_qdrant"],
+    parameter_observation_refs: ["paramobs_legacy_parameter"],
   };
 
   delete evidence.workspace_id;
@@ -52,7 +52,7 @@ test("workspace backfill stamps workspace ids and rewrites parameter ids plus pa
   fs.mkdirSync(packetDir, { recursive: true });
   const legacyPacket = {
     ...loadExample("case_compilation_packet"),
-    parameter_observation_refs: ["paramobs_legacy_qdrant"],
+    parameter_observation_refs: ["paramobs_legacy_parameter"],
   };
   delete legacyPacket.workspace_id;
   fs.writeFileSync(path.join(packetDir, "legacy.json"), `${JSON.stringify(legacyPacket, null, 2)}\n`);

@@ -29,7 +29,7 @@ test("openai hybrid embedder batches dense requests and returns sparse vectors",
     documents: [
       "scope filter ranking project retrieval",
       "payload store sidecar evidence",
-      "managed qdrant lifecycle benchmark",
+      "embedded lancedb lifecycle benchmark",
     ],
   });
   const query = await embedder.embedQuery({ query: "scope filtering" });
@@ -43,7 +43,7 @@ test("openai hybrid embedder batches dense requests and returns sparse vectors",
     "scope filter ranking project retrieval",
     "payload store sidecar evidence",
   ]);
-  assert.deepEqual(calls[1].body.input, ["managed qdrant lifecycle benchmark"]);
+  assert.deepEqual(calls[1].body.input, ["embedded lancedb lifecycle benchmark"]);
   assert.deepEqual(documents[0].dense, [0.1, 0.2, 0.3]);
   assert.ok(documents[0].sparse.indices.length > 0);
   assert.equal(query.dense.length, 3);

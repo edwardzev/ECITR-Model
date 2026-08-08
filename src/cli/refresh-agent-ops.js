@@ -2,12 +2,7 @@
 
 const path = require("node:path");
 
-const {
-  DEFAULT_COLLECTION_NAME,
-  DEFAULT_QDRANT_URL,
-  refreshAgentOpsIndex,
-  resolveDefaultAgentOpsRoot,
-} = require("../importers/agent-ops-refresh");
+const { refreshAgentOpsIndex, resolveDefaultAgentOpsRoot } = require("../importers/agent-ops-refresh");
 const { REPO_ROOT } = require("../validation/schema-registry");
 
 async function main() {
@@ -20,16 +15,8 @@ function parseArgs(args) {
   const options = {
     agentOpsRoot: process.env.ECITR_AGENT_OPS_ROOT ?? resolveDefaultAgentOpsRoot(),
     catalogRoot: process.env.ECITR_CATALOG_ROOT ?? path.join(REPO_ROOT, ".local", "catalog"),
-    qdrantUrl: process.env.ECITR_QDRANT_URL ?? DEFAULT_QDRANT_URL,
-    collectionName: process.env.ECITR_QDRANT_COLLECTION ?? DEFAULT_COLLECTION_NAME,
     projectId: null,
     dryRun: false,
-    skipQdrantSync: true,
-    skipSmokeCheck: false,
-    recreateCollection: false,
-    embedderType: process.env.ECITR_EMBEDDER ?? "openai",
-    embeddingModel: process.env.ECITR_EMBEDDING_MODEL,
-    sparseBucketCount: 2048,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -41,53 +28,11 @@ function parseArgs(args) {
       case "--catalog-root":
         options.catalogRoot = args[++index];
         break;
-      case "--qdrant-url":
-        options.qdrantUrl = args[++index];
-        break;
-      case "--collection":
-        options.collectionName = args[++index];
-        break;
       case "--project-id":
         options.projectId = args[++index];
         break;
-      case "--dense-vector-size":
-        options.denseVectorSize = Number.parseInt(args[++index], 10);
-        break;
-      case "--sparse-bucket-count":
-        options.sparseBucketCount = Number.parseInt(args[++index], 10);
-        break;
-      case "--embedder":
-        options.embedderType = args[++index];
-        break;
-      case "--embedding-model":
-        options.embeddingModel = args[++index];
-        break;
-      case "--openai-api-key":
-        options.openAIApiKey = args[++index];
-        break;
-      case "--openai-base-url":
-        options.openAIBaseUrl = args[++index];
-        break;
-      case "--openai-organization":
-        options.openAIOrganization = args[++index];
-        break;
-      case "--openai-project":
-        options.openAIProject = args[++index];
-        break;
       case "--dry-run":
         options.dryRun = true;
-        break;
-      case "--skip-qdrant-sync":
-        options.skipQdrantSync = true;
-        break;
-      case "--sync-qdrant":
-        options.skipQdrantSync = false;
-        break;
-      case "--skip-smoke-check":
-        options.skipSmokeCheck = true;
-        break;
-      case "--recreate-collection":
-        options.recreateCollection = true;
         break;
       default:
         throw new Error(`Unknown argument: ${arg}`);

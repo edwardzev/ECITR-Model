@@ -18,7 +18,7 @@ test("chat distiller captures explicit literal bindings and skips prose-only gue
   fs.writeFileSync(payloadPath, `${JSON.stringify({
     capture_kind: "conversation_snapshot",
     messages: [
-      { sequence: 1, role: "user", text: "ECITR_QDRANT_URL=http://127.0.0.1:6333" },
+      { sequence: 1, role: "user", text: "ECITR_LANCEDB_URI=.local/lancedb" },
       { sequence: 2, role: "assistant", text: "We should probably revisit the timeout later." },
     ],
   }, null, 2)}\n`);
@@ -43,7 +43,7 @@ test("chat distiller captures explicit literal bindings and skips prose-only gue
 
   assert.equal(summary.supported_evidence, 1);
   assert.equal(observations.length, 1);
-  assert.equal(observations[0].parameter_key, "ECITR_QDRANT_URL");
+  assert.equal(observations[0].parameter_key, "ECITR_LANCEDB_URI");
 });
 
 test("parameter refresh keeps exact-key definitions distinct and stays idempotent", () => {
@@ -349,7 +349,7 @@ test("diff distiller emits set and unset observations with supersession", () => 
   fs.mkdirSync(path.dirname(payloadPath), { recursive: true });
   fs.writeFileSync(
     payloadPath,
-    "--- a/.env\n+++ b/.env\n-ECITR_QDRANT_URL=http://old.local\n+ECITR_QDRANT_URL=http://127.0.0.1:6333\n",
+    "--- a/.env\n+++ b/.env\n-ECITR_LANCEDB_URI=.local/lancedb-v1\n+ECITR_LANCEDB_URI=.local/lancedb\n",
     "utf8",
   );
 

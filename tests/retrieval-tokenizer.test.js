@@ -18,7 +18,7 @@ test("shared retrieval tokenizer is Unicode-aware and preserves exact underscore
     "no",
     "write",
   ]);
-  assert.deepEqual(tokenizeRetrievalText("ECITR_QDRANT_URL"), ["ecitr_qdrant_url"]);
+  assert.deepEqual(tokenizeRetrievalText("ECITR_LANCEDB_URI"), ["ecitr_lancedb_uri"]);
   assert.deepEqual(tokenizeRetrievalText("Müller Muller"), ["muller", "muller"]);
   assert.deepEqual(tokenizeRetrievalText("בדיקת זיכרון ذاكرة المشروع память проекта 项目记忆"), [
     "בדיקת",
@@ -54,7 +54,7 @@ test("lexical, metadata, semantic, and temporal lanes share Unicode token behavi
       summary: "בדיקת זיכרון",
       action: "Preserve multilingual retrieval truth.",
       steps: [],
-      tool_binding: ["ECITR_QDRANT_URL"],
+      tool_binding: ["ECITR_LANCEDB_URI"],
       environment_bounds: [],
       updated_at: "2026-08-08T00:00:00Z",
     }],
@@ -74,7 +74,7 @@ test("lexical, metadata, semantic, and temporal lanes share Unicode token behavi
   const now = new Date("2026-08-08T00:00:00Z");
   const queries = {
     lexical: "Muller",
-    metadata: "ECITR_QDRANT_URL",
+    metadata: "ECITR_LANCEDB_URI",
     semantic: "ذاكرة",
     temporal: "latest память",
   };

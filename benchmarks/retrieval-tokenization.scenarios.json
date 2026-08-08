@@ -110,12 +110,12 @@
     "expected_ids": ["expected"]
   },
   {
-    "scenario_id": "token_identifier_qdrant_001",
+    "scenario_id": "token_identifier_lancedb_001",
     "category": "exact_identifier",
-    "query": "ECITR_QDRANT_URL",
+    "query": "ECITR_LANCEDB_URI",
     "candidates": [
-      { "candidate_id": "expected", "text": "ECITR_QDRANT_URL" },
-      { "candidate_id": "noise", "text": "ECITR QDRANT endpoint" }
+      { "candidate_id": "expected", "text": "ECITR_LANCEDB_URI" },
+      { "candidate_id": "noise", "text": "ECITR LANCEDB path" }
     ],
     "expected_ids": ["expected"]
   },

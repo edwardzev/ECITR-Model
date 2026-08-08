@@ -3,38 +3,20 @@ const path = require("node:path");
 const { REPO_ROOT } = require("../validation/schema-registry");
 const { EcitrValidator } = require("../validation/validator");
 const { FileBackedCatalog } = require("../storage/file-backed-catalog");
-const {
-  DEFAULT_COLLECTION_NAME,
-  DEFAULT_QDRANT_URL,
-  countCatalogRecords,
-  defaultSyncCatalog,
-} = require("./agent-ops-refresh");
+const { countCatalogRecords } = require("./agent-ops-refresh");
 const { importCodexRollouts, resolveDefaultCodexRoot } = require("./codex-rollouts");
 
 async function refreshCodexIndex({
   codexRoot = resolveDefaultCodexRoot(),
   catalogRoot = path.join(REPO_ROOT, ".local", "catalog"),
-  qdrantUrl = DEFAULT_QDRANT_URL,
-  collectionName = DEFAULT_COLLECTION_NAME,
   dryRun = false,
   includeSessions = true,
   includeArchived = true,
   workspaceRoot = null,
-  recreateCollection = false,
-  skipQdrantSync = true,
-  embedderType = process.env.ECITR_EMBEDDER ?? "openai",
-  embeddingModel = process.env.ECITR_EMBEDDING_MODEL,
-  denseVectorSize,
-  sparseBucketCount = 2048,
-  openAIApiKey = process.env.OPENAI_API_KEY,
-  openAIBaseUrl = process.env.OPENAI_BASE_URL,
-  openAIOrganization = process.env.OPENAI_ORGANIZATION,
-  openAIProject = process.env.OPENAI_PROJECT,
   skipStructuralCheck = false,
   validator = new EcitrValidator(),
   importRollouts = importCodexRollouts,
   loadCatalogs = defaultLoadCatalogs,
-  syncCatalog = defaultSyncCatalog,
   structuralCheck = runStructuralCheck,
 } = {}) {
   if (!codexRoot) {
@@ -51,14 +33,9 @@ async function refreshCodexIndex({
     dry_run: dryRun,
     codex_root: resolvedCodexRoot,
     catalog_root: resolvedCatalogRoot,
-    qdrant_url: qdrantUrl,
-    collection_name: collectionName,
     include_sessions: includeSessions,
     include_archived: includeArchived,
     workspace_root_filter: workspaceRoot ? path.resolve(workspaceRoot) : null,
-    recreate_collection: recreateCollection,
-    embedder_type: embedderType,
-    embedding_model: embedderType === "openai" ? (embeddingModel ?? "text-embedding-3-small") : null,
   };
 
   summary.rollouts = importRollouts({
@@ -73,7 +50,6 @@ async function refreshCodexIndex({
   assertImportSummaryClean(summary.rollouts);
 
   if (dryRun) {
-    summary.qdrant_sync = { status: "skipped_dry_run" };
     summary.structural_checks = { status: "skipped_dry_run" };
     return summary;
   }
@@ -83,28 +59,6 @@ async function refreshCodexIndex({
     validator,
   });
   summary.catalog_counts = countCatalogRecords(catalogs);
-  if (skipQdrantSync) {
-    summary.qdrant_sync = {
-      status: "skipped",
-      endpoint: qdrantUrl,
-      collection_name: collectionName,
-    };
-  } else {
-    summary.qdrant_sync = await syncCatalog({
-      catalogs,
-      qdrantUrl,
-      collectionName,
-      embedderType,
-      embeddingModel,
-      denseVectorSize,
-      sparseBucketCount,
-      openAIApiKey,
-      openAIBaseUrl,
-      openAIOrganization,
-      openAIProject,
-      recreateCollection,
-    });
-  }
 
   if (skipStructuralCheck) {
     summary.structural_checks = { status: "skipped" };

@@ -37,7 +37,7 @@
     "scenario_id": "analysis-parameter-example-catalog",
     "request": {
       "request_id": "req_runtime_baseline_003",
-      "query": "ECITR_QDRANT_URL",
+      "query": "ECITR_LANCEDB_URI",
       "project_scope": "project_family",
       "intent": "analysis"
     },

@@ -12,7 +12,6 @@ const {
   DEFAULT_TABLE_NAME: DEFAULT_LANCEDB_TABLE_NAME,
   LanceDbSemanticBackend,
 } = require("../retrieval/semantic-backends/lancedb-backend");
-const { QdrantSemanticBackend } = require("../retrieval/semantic-backends/qdrant-backend");
 const { FileBackedCatalog } = require("../storage/file-backed-catalog");
 const { seedExampleCatalog } = require("../storage/seed-example-catalog");
 
@@ -21,9 +20,8 @@ async function main() {
   const { catalog, rootDir } = loadOrSeedCatalog(options);
   const catalogs = catalog.loadRuntimeCatalogs();
   const embedderType = options.embedderType
-    ?? (options.backend === "lancedb"
-      ? process.env.ECITR_LANCEDB_EMBEDDER ?? "hash"
-      : process.env.ECITR_EMBEDDER ?? "openai");
+    ?? process.env.ECITR_LANCEDB_EMBEDDER
+    ?? "hash";
   const embedder = buildSemanticEmbedder({
     embedderType,
     embeddingModel: options.embeddingModel,
@@ -70,56 +68,24 @@ async function main() {
 }
 
 async function buildCandidateBackend({ options, catalogs, embedder }) {
-  if (options.backend === "lancedb") {
-    const uri = options.lancedbUri ?? process.env.ECITR_LANCEDB_URI ?? DEFAULT_LANCEDB_URI;
-    const tableName = options.lancedbTable ?? process.env.ECITR_LANCEDB_TABLE ?? DEFAULT_LANCEDB_TABLE_NAME;
-    const backend = new LanceDbSemanticBackend({
-      uri,
-      tableName,
-      catalogs,
-      embedder,
-    });
-
-    if (options.syncBeforeRun) {
-      await backend.syncCatalog();
-    }
-
-    return {
-      label: "lancedb",
-      target: {
-        uri,
-        table_name: tableName,
-      },
-      backend,
-    };
-  }
-
-  const endpoint = options.qdrantUrl ?? process.env.ECITR_QDRANT_URL;
-  const collectionName = options.collection ?? process.env.ECITR_QDRANT_COLLECTION;
-  if (!endpoint || !collectionName) {
-    throw new Error("benchmark-semantic requires --qdrant-url and --collection for --backend qdrant, or matching ECITR_QDRANT_URL and ECITR_QDRANT_COLLECTION env vars.");
-  }
-
-  const backend = new QdrantSemanticBackend({
-    endpoint,
-    collectionName,
+  const uri = options.lancedbUri ?? process.env.ECITR_LANCEDB_URI ?? DEFAULT_LANCEDB_URI;
+  const tableName = options.lancedbTable ?? process.env.ECITR_LANCEDB_TABLE ?? DEFAULT_LANCEDB_TABLE_NAME;
+  const backend = new LanceDbSemanticBackend({
+    uri,
+    tableName,
     catalogs,
     embedder,
   });
 
   if (options.syncBeforeRun) {
-    await backend.ensureCollection({
-      denseVectorSize: embedder.denseVectorSize,
-      recreate: options.recreateCollection,
-    });
     await backend.syncCatalog();
   }
 
   return {
-    label: "qdrant",
+    label: "lancedb",
     target: {
-      endpoint,
-      collection_name: collectionName,
+      uri,
+      table_name: tableName,
     },
     backend,
   };
@@ -151,9 +117,8 @@ function loadOrSeedCatalog(options) {
 
 function parseArgs(args) {
   const options = {
-    backend: "qdrant",
+    backend: "lancedb",
     syncBeforeRun: true,
-    recreateCollection: false,
     seedExamples: false,
     embedderType: null,
   };
@@ -161,9 +126,6 @@ function parseArgs(args) {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     switch (arg) {
-      case "--qdrant-url":
-        options.qdrantUrl = args[++index];
-        break;
       case "--backend":
         options.backend = args[++index];
         break;
@@ -172,9 +134,6 @@ function parseArgs(args) {
         break;
       case "--lancedb-table":
         options.lancedbTable = args[++index];
-        break;
-      case "--collection":
-        options.collection = args[++index];
         break;
       case "--catalog-root":
         options.catalogRoot = args[++index];
@@ -206,9 +165,6 @@ function parseArgs(args) {
       case "--skip-sync":
         options.syncBeforeRun = false;
         break;
-      case "--recreate-collection":
-        options.recreateCollection = true;
-        break;
       case "--seed-examples":
         options.seedExamples = true;
         break;
@@ -217,7 +173,7 @@ function parseArgs(args) {
     }
   }
 
-  if (!["qdrant", "lancedb"].includes(options.backend)) {
+  if (options.backend !== "lancedb") {
     throw new Error(`Unsupported --backend: ${options.backend}`);
   }
 

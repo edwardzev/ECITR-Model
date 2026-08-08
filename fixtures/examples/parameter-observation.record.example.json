@@ -1,11 +1,11 @@
 {
-  "observation_id": "paramobs_01041f2d5c6ded7a1520",
-  "definition_id": "paramdef_d69439bfc78f10ee3367",
+  "observation_id": "paramobs_a444b23ed67de1a02e77",
+  "definition_id": "paramdef_97a187caebdaa015ed6b",
   "workspace_id": "ecitr_model",
-  "parameter_key": "ECITR_QDRANT_URL",
-  "raw_value_text": "http://127.0.0.1:6333",
+  "parameter_key": "ECITR_LANCEDB_URI",
+  "raw_value_text": ".local/lancedb",
   "value_type": "string",
-  "value_json": "http://127.0.0.1:6333",
+  "value_json": ".local/lancedb",
   "observation_kind": "set",
   "observed_at": "2026-04-10T09:00:00Z",
   "project_scope": "global",
@@ -14,12 +14,12 @@
   ],
   "source_spans": [
     {
-      "path": "config.qdrant.url",
+      "path": "config.lancedb.uri",
       "start_line": 1,
       "end_line": 1,
       "start_char": 0,
-      "end_char": 21,
-      "quote": "ECITR_QDRANT_URL=http://127.0.0.1:6333"
+      "end_char": 32,
+      "quote": "ECITR_LANCEDB_URI=.local/lancedb"
     }
   ],
   "strategy_id": "parameter-distiller-file-v1",
@@ -27,7 +27,7 @@
   "extracted_by": "parameter-distiller",
   "confidence": 0.95,
   "tool_binding": [
-    "qdrant-local"
+    "lancedb:sync"
   ],
   "environment_bounds": [
     "local ECITR workspace"

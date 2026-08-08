@@ -17,13 +17,18 @@ There are now two ECITR-owned paths:
 
 ## Runtime Command
 
-Refresh Codex-native conversation evidence from local Codex storage into `.local/catalog`, sync the derived Qdrant index, and run structural capture checks:
+Refresh Codex-native conversation evidence from local Codex storage into
+`.local/catalog` and run structural capture checks:
 
 ```bash
 npm run refresh:codex
 ```
 
 This reads from `~/.codex` by default and imports printed `user_message` and `agent_message` events from Codex rollout files.
+
+This manual import command does not rebuild derived semantic state. The
+autonomous refresh wrapper performs the final LanceDB sync after all canonical
+refresh and promotion stages complete.
 
 ## Runtime Policy
 

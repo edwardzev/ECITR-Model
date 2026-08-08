@@ -25,8 +25,8 @@ test("file-backed catalog persists and reloads runtime catalogs", () => {
   assert.equal(runtimeCatalogs.evidence[0].evidence_id, "ev_mem_20260410_001");
   assert.equal(runtimeCatalogs.cases[0].case_id, "case_retrieval_scope_drift_001");
   assert.equal(runtimeCatalogs.atomic_claim_sets[0].claim_set_id, "claimset_scope_retrieval_evidence_001");
-  assert.equal(runtimeCatalogs.parameter_definitions[0].definition_id, "paramdef_d69439bfc78f10ee3367");
-  assert.equal(runtimeCatalogs.parameter_observations[0].observation_id, "paramobs_01041f2d5c6ded7a1520");
+  assert.equal(runtimeCatalogs.parameter_definitions[0].definition_id, "paramdef_97a187caebdaa015ed6b");
+  assert.equal(runtimeCatalogs.parameter_observations[0].observation_id, "paramobs_a444b23ed67de1a02e77");
   assert.equal(runtimeCatalogs.review_audit_entries[0].audit_id, "audit_review_case_scope_retrieval_001");
 });
 

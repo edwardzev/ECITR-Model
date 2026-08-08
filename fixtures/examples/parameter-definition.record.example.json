@@ -1,8 +1,8 @@
 {
-  "definition_id": "paramdef_d69439bfc78f10ee3367",
+  "definition_id": "paramdef_97a187caebdaa015ed6b",
   "workspace_id": "ecitr_model",
-  "observed_key": "ECITR_QDRANT_URL",
-  "normalized_key": "ecitr_qdrant_url",
+  "observed_key": "ECITR_LANCEDB_URI",
+  "normalized_key": "ecitr_lancedb_uri",
   "value_type": "string",
   "created_at": "2026-04-15T09:00:00Z",
   "first_observed_at": "2026-04-15T09:00:00Z",

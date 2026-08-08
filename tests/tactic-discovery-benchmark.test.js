@@ -16,28 +16,28 @@ test("tactic discovery approves a supported tactic candidate grounded in active 
   try {
     const catalog = new FileBackedCatalog({ rootDir });
     const caseOne = buildCase({
-      caseId: "case_qdrant_runtime_001",
-      evidenceRef: "ev_qdrant_runtime_001",
-      problem: "Local Qdrant was started ad hoc and runtime state drifted outside the managed workspace layout.",
-      action: "Implemented a managed qdrant-local helper with install, start, stop, status, and explicit runtime paths.",
-      outcome: "Local Qdrant now runs through the managed helper and stays under the repo-owned runtime layout.",
-      failure: "Parallel start and status checks can produce a false negative during startup.",
-      applyWhen: ["A local derived Qdrant backend is being operated under the repo-managed runtime"],
-      doNotApply: ["The backend is not Qdrant or not local"],
+      caseId: "case_lancedb_sync_001",
+      evidenceRef: "ev_lancedb_sync_001",
+      problem: "The embedded LanceDB index was rebuilt ad hoc and drifted outside the repository-owned derived path.",
+      action: "Implemented an explicit lancedb:sync command with a repository-owned index path.",
+      outcome: "The embedded LanceDB index now rebuilds from the canonical catalog under the repository-owned path.",
+      failure: "A partial rebuild can leave the derived index basis stale.",
+      applyWhen: ["A derived LanceDB index is being rebuilt from the canonical catalog"],
+      doNotApply: ["No embedded LanceDB index exists"],
     });
     const caseTwo = buildCase({
-      caseId: "case_qdrant_runtime_002",
-      evidenceRef: "ev_qdrant_runtime_002",
-      problem: "Live Qdrant sync initially failed because the prototype used invalid point ids and non-idempotent collection setup.",
-      action: "Patched the Qdrant backend to use deterministic UUID point ids, idempotent collection creation, and reran sync plus benchmark successfully.",
-      outcome: "The derived Qdrant backend now syncs and benchmarks successfully against a live local process.",
+      caseId: "case_lancedb_sync_002",
+      evidenceRef: "ev_lancedb_sync_002",
+      problem: "The embedded index retained a stale embedding signature after the tokenizer changed.",
+      action: "Rebuilt LanceDB from the canonical catalog and verified the stored embedding signature and catalog basis.",
+      outcome: "The derived LanceDB backend now syncs and benchmarks successfully with the current signature.",
       failure: "If the backend shape changes again, rerun sync and benchmark before trusting retrieval.",
-      applyWhen: ["A live local Qdrant-derived backend is being changed or resynced"],
-      doNotApply: ["No live Qdrant process exists"],
+      applyWhen: ["The embedded LanceDB backend is being changed or resynced"],
+      doNotApply: ["No derived LanceDB index exists"],
     });
     const invariant = buildInvariant({
-      invariantId: "inv_qdrant_subordinate_001",
-      evidenceRefs: ["ev_qdrant_runtime_001", "ev_qdrant_runtime_002"],
+      invariantId: "inv_lancedb_subordinate_001",
+      evidenceRefs: ["ev_lancedb_sync_001", "ev_lancedb_sync_002"],
       title: "Derived backends remain subordinate to canonical contracts",
       summary: "Derived semantic backends may improve retrieval but remain subordinate to canonical records.",
       statement: "A derived semantic backend may improve retrieval, but it must remain subordinate to canonical contracts and be resynced from the governed catalog.",
@@ -54,25 +54,24 @@ test("tactic discovery approves a supported tactic candidate grounded in active 
 
     const surface = new TacticDiscoverySurface({ catalogRoot: rootDir });
     const result = surface.evaluateCandidate({
-      title: "Operate local Qdrant through the managed runtime and resync after backend changes",
-      summary: "Use the managed local runtime helper and resync the derived collection after backend changes.",
-      action: "Run local Qdrant through the managed runtime helper, verify healthy status serially, resync the derived collection, and rerun the semantic benchmark after backend changes.",
+      title: "Resync the embedded LanceDB index after semantic backend changes",
+      summary: "Rebuild the embedded index from the canonical catalog after backend changes.",
+      action: "Run the LanceDB catalog sync, verify the embedding signature and catalog basis, and rerun the semantic benchmark after backend changes.",
       source_case_refs: [caseOne.case_id, caseTwo.case_id],
       supporting_invariant_refs: [invariant.id],
-      tool_binding: ["qdrant-local", "sync-qdrant", "semantic-benchmark"],
-      tool_version_bounds: ">=1.17.1 <2.0.0",
+      tool_binding: ["lancedb:sync", "semantic-benchmark"],
+      tool_version_bounds: ">=0.27.2 <1.0.0",
       environment_bounds: ["local ECITR workspace", "derived semantic backend"],
-      prerequisites: ["Managed Qdrant binary is installed", "Canonical catalog exists before sync"],
+      prerequisites: ["Repository-owned LanceDB path is writable", "Canonical catalog exists before sync"],
       steps: [
-        "Start Qdrant through the managed local runtime helper",
-        "Wait for a healthy serial status check",
-        "Run sync-qdrant against the derived collection",
+        "Run lancedb:sync against the repository-owned derived index",
+        "Verify the embedding signature and catalog basis",
         "Rerun the semantic benchmark after sync completes"
       ],
-      fallbacks: ["If the managed helper fails, inspect logs and restart through the same helper"],
-      rollback: ["Stop the managed runtime", "Revert the backend change before resyncing"],
+      fallbacks: ["If sync fails, preserve the canonical catalog and rebuild the derived LanceDB path"],
+      rollback: ["Restore the previous derived index", "Revert the backend change before resyncing"],
       revalidate_at: "2026-07-01T00:00:00Z",
-      validated_on: ["qdrant-local 1.17.1"],
+      validated_on: ["@lancedb/lancedb 0.27.2"],
       confidence: 0.84,
     });
 
@@ -90,15 +89,15 @@ test("tactic discovery blocks a mismatched candidate even when cases and invaria
 
   try {
     const catalog = new FileBackedCatalog({ rootDir });
-    const qdrantCase = buildCase({
-      caseId: "case_qdrant_runtime_003",
-      evidenceRef: "ev_qdrant_runtime_003",
-      problem: "Local Qdrant runtime drifted outside the repo-managed layout.",
-      action: "Implemented a managed qdrant-local helper with explicit runtime paths.",
-      outcome: "Local Qdrant is now managed under the workspace.",
-      failure: "Status checks can race during startup.",
-      applyWhen: ["A local Qdrant runtime exists"],
-      doNotApply: ["No local Qdrant runtime exists"],
+    const lanceDbCase = buildCase({
+      caseId: "case_lancedb_sync_003",
+      evidenceRef: "ev_lancedb_sync_003",
+      problem: "The embedded LanceDB index drifted outside the repository-owned derived path.",
+      action: "Implemented an explicit lancedb:sync command with a repository-owned path.",
+      outcome: "LanceDB now rebuilds from the canonical catalog under the workspace.",
+      failure: "A partial rebuild can leave a stale derived index.",
+      applyWhen: ["An embedded LanceDB index exists"],
+      doNotApply: ["No embedded LanceDB index exists"],
     });
     const reviewCase = buildCase({
       caseId: "case_operator_review_001",
@@ -123,18 +122,18 @@ test("tactic discovery blocks a mismatched candidate even when cases and invaria
       breakers: ["Mutable ingress paths become authority"],
     });
 
-    catalog.writeRecord("case", qdrantCase);
+    catalog.writeRecord("case", lanceDbCase);
     catalog.writeRecord("case", reviewCase);
     catalog.writeRecord("invariant", invariant);
 
     const surface = new TacticDiscoverySurface({ catalogRoot: rootDir });
     const result = surface.evaluateCandidate({
-      title: "Run Qdrant locally and rebuild operator morning review in one tactic",
+      title: "Rebuild LanceDB and operator morning review in one tactic",
       summary: "This deliberately mixes unrelated domains.",
-      action: "Start Qdrant locally and rebuild the operator morning review surface in one procedure.",
-      source_case_refs: [qdrantCase.case_id, reviewCase.case_id],
+      action: "Rebuild LanceDB and rebuild the operator morning review surface in one procedure.",
+      source_case_refs: [lanceDbCase.case_id, reviewCase.case_id],
       supporting_invariant_refs: [invariant.id],
-      tool_binding: ["qdrant-local", "morning-review"],
+      tool_binding: ["lancedb:sync", "morning-review"],
       tool_version_bounds: ">=1.0.0 <2.0.0",
       environment_bounds: ["mixed domains"],
       prerequisites: ["Both domains exist"],
@@ -161,28 +160,28 @@ test("tactic discovery benchmark reports expected decisions", (t) => {
   try {
     const catalog = new FileBackedCatalog({ rootDir });
     const caseOne = buildCase({
-      caseId: "case_qdrant_runtime_004",
-      evidenceRef: "ev_qdrant_runtime_004",
-      problem: "Local Qdrant runtime drifted outside the repo-managed layout.",
-      action: "Implemented a managed qdrant-local helper with explicit runtime paths.",
-      outcome: "Local Qdrant now runs through the managed helper.",
-      failure: "Status checks can race during startup.",
-      applyWhen: ["A local Qdrant runtime exists"],
-      doNotApply: ["No local Qdrant runtime exists"],
+      caseId: "case_lancedb_sync_004",
+      evidenceRef: "ev_lancedb_sync_004",
+      problem: "The embedded LanceDB index drifted outside the repository-owned derived path.",
+      action: "Implemented an explicit lancedb:sync command with a repository-owned path.",
+      outcome: "LanceDB now rebuilds from the canonical catalog under the workspace.",
+      failure: "A partial rebuild can leave a stale derived index.",
+      applyWhen: ["An embedded LanceDB index exists"],
+      doNotApply: ["No embedded LanceDB index exists"],
     });
     const caseTwo = buildCase({
-      caseId: "case_qdrant_runtime_005",
-      evidenceRef: "ev_qdrant_runtime_005",
-      problem: "Live Qdrant sync failed because point ids and collection setup were not valid for the real backend.",
-      action: "Patched deterministic UUID point ids, idempotent ensureCollection behavior, and reran sync plus benchmark.",
-      outcome: "Live sync and semantic benchmark both pass against the local Qdrant process.",
+      caseId: "case_lancedb_sync_005",
+      evidenceRef: "ev_lancedb_sync_005",
+      problem: "The embedded index retained a stale embedding signature after the backend shape changed.",
+      action: "Rebuilt the derived index and verified its embedding signature and catalog basis before benchmarking.",
+      outcome: "LanceDB sync and the semantic benchmark both pass against the embedded index.",
       failure: "Backend changes require rerunning sync and benchmark before trusting retrieval.",
-      applyWhen: ["A Qdrant backend change is being rolled out"],
-      doNotApply: ["No Qdrant backend exists"],
+      applyWhen: ["A LanceDB backend change is being rolled out"],
+      doNotApply: ["No embedded LanceDB backend exists"],
     });
     const invariant = buildInvariant({
-      invariantId: "inv_qdrant_subordinate_002",
-      evidenceRefs: ["ev_qdrant_runtime_004", "ev_qdrant_runtime_005"],
+      invariantId: "inv_lancedb_subordinate_002",
+      evidenceRefs: ["ev_lancedb_sync_004", "ev_lancedb_sync_005"],
       title: "Derived backends remain subordinate to canonical contracts",
       summary: "Derived backends stay subordinate to the canonical catalog.",
       statement: "Derived semantic backends must be resynced from the canonical catalog and may not replace it as source of truth.",
@@ -204,27 +203,26 @@ test("tactic discovery benchmark reports expected decisions", (t) => {
         evaluation_at: "2026-06-30T00:00:00Z",
         entries: [
           {
-            label: "approve_qdrant_runtime",
+            label: "approve_lancedb_sync",
             expected_decision: "approve",
-            title: "Operate local Qdrant through the managed runtime and resync after backend changes",
-            summary: "Use the managed runtime helper and rerun sync after backend changes.",
-            action: "Run local Qdrant through the managed runtime helper, verify healthy status serially, resync the derived collection, and rerun the semantic benchmark after backend changes.",
+            title: "Resync the embedded LanceDB index after semantic backend changes",
+            summary: "Rebuild the embedded index from the canonical catalog after backend changes.",
+            action: "Run the LanceDB catalog sync, verify the embedding signature and catalog basis, and rerun the semantic benchmark after backend changes.",
             source_case_refs: [caseOne.case_id, caseTwo.case_id],
             supporting_invariant_refs: [invariant.id],
-            tool_binding: ["qdrant-local", "sync-qdrant", "semantic-benchmark"],
-            tool_version_bounds: ">=1.17.1 <2.0.0",
+            tool_binding: ["lancedb:sync", "semantic-benchmark"],
+            tool_version_bounds: ">=0.27.2 <1.0.0",
             environment_bounds: ["local ECITR workspace", "derived semantic backend"],
-            prerequisites: ["Managed Qdrant binary is installed", "Canonical catalog exists before sync"],
+            prerequisites: ["Repository-owned LanceDB path is writable", "Canonical catalog exists before sync"],
             steps: [
-              "Start Qdrant through the managed local runtime helper",
-              "Wait for a healthy serial status check",
-              "Run sync-qdrant against the derived collection",
+              "Run lancedb:sync against the repository-owned derived index",
+              "Verify the embedding signature and catalog basis",
               "Rerun the semantic benchmark after sync completes"
             ],
-            fallbacks: ["Inspect managed runtime logs before retrying"],
-            rollback: ["Stop Qdrant", "Revert the backend change"],
+            fallbacks: ["Preserve the canonical catalog and rebuild the derived index before retrying"],
+            rollback: ["Restore the previous derived index", "Revert the backend change"],
             revalidate_at: "2026-07-01T00:00:00Z",
-            validated_on: ["qdrant-local 1.17.1"],
+            validated_on: ["@lancedb/lancedb 0.27.2"],
             confidence: 0.84
           },
           {
@@ -232,18 +230,18 @@ test("tactic discovery benchmark reports expected decisions", (t) => {
             expected_decision: "block",
             title: "Missing invariant support should block",
             summary: "A tactic candidate without active invariant support should block.",
-            action: "Run local Qdrant through the managed helper and resync it.",
+            action: "Rebuild the embedded LanceDB index from the canonical catalog.",
             source_case_refs: [caseOne.case_id, caseTwo.case_id],
             supporting_invariant_refs: [],
-            tool_binding: ["qdrant-local"],
-            tool_version_bounds: ">=1.17.1 <2.0.0",
+            tool_binding: ["lancedb:sync"],
+            tool_version_bounds: ">=0.27.2 <1.0.0",
             environment_bounds: ["local ECITR workspace"],
-            prerequisites: ["Managed Qdrant binary is installed"],
-            steps: ["Start the helper", "Run sync-qdrant"],
+            prerequisites: ["Repository-owned LanceDB path is writable"],
+            steps: ["Run lancedb:sync", "Verify the derived index basis"],
             fallbacks: ["Inspect logs"],
             rollback: ["Stop the helper"],
             revalidate_at: "2026-07-01T00:00:00Z",
-            validated_on: ["qdrant-local 1.17.1"],
+            validated_on: ["@lancedb/lancedb 0.27.2"],
             confidence: 0.55
           }
         ]

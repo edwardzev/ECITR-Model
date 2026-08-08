@@ -29,7 +29,7 @@ The first implementation surface is:
 - packet-based promotion pipelines
 - retrieval execution and fusion
 - pluggable semantic backend seam
-- Qdrant-backed semantic backend prototype
+- embedded LanceDB semantic backend derived from the canonical catalog
 - local deterministic embedder for prototype sync and benchmark runs
 - derived support-graph snapshots, diffs, and internal graph queries
 - orchestrator delegation runtime

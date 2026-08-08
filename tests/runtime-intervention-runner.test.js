@@ -53,7 +53,7 @@ test("failure_retry request composition is deterministic for failure kinds and n
       query: "debug the startup failure",
       project_scope: "project",
       failure_kind: "module_not_found",
-      failure_text: truncateNormalizedText("Cannot find module ../qdrant-backend.js"),
+      failure_text: truncateNormalizedText("Cannot find module ../semantic-backend.js"),
     },
     now: new Date("2026-05-01T00:00:00Z"),
   });
@@ -63,7 +63,7 @@ test("failure_retry request composition is deterministic for failure kinds and n
       query: "debug the startup failure",
       project_scope: "project",
       failure_kind: "env_mismatch",
-      failure_text: truncateNormalizedText("Expected ECITR_QDRANT_URL but got localhost:0"),
+      failure_text: truncateNormalizedText("Expected ECITR_LANCEDB_URI but got missing"),
     },
     now: new Date("2026-05-01T00:00:00Z"),
   });
@@ -80,11 +80,11 @@ test("failure_retry request composition is deterministic for failure kinds and n
 
   assert.equal(
     moduleRequest.query,
-    "debug the startup failure module not found cannot find module ../qdrant-backend.js",
+    "debug the startup failure module not found cannot find module ../semantic-backend.js",
   );
   assert.equal(
     envRequest.query,
-    "debug the startup failure env mismatch expected ecitr_qdrant_url but got localhost:0",
+    "debug the startup failure env mismatch expected ecitr_lancedb_uri but got missing",
   );
   assert.equal(
     permissionRequest.query,
@@ -102,9 +102,9 @@ test("intervention normalizers preserve deterministic lower-case tokens and trun
       mode: "failure_retry",
       query: "debug startup",
       failure_kind: "module_not_found",
-      failure_text: truncateNormalizedText("Cannot find module ../qdrant-backend.js"),
+      failure_text: truncateNormalizedText("Cannot find module ../semantic-backend.js"),
     }),
-    "debug startup module not found cannot find module ../qdrant-backend.js",
+    "debug startup module not found cannot find module ../semantic-backend.js",
   );
   assert.equal(truncateNormalizedText("A".repeat(500)).length, 240);
 });

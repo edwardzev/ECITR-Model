@@ -68,11 +68,9 @@ async function runAutonomousRefresh({
 
   summary.codex = await captureStage(summary, "codex", () => refreshCodexIndexImpl({
     catalogRoot: resolvedCatalogRoot,
-    skipQdrantSync: true,
   }));
   summary.agent_ops = await captureStage(summary, "agent_ops", () => refreshAgentOpsIndexImpl({
     catalogRoot: resolvedCatalogRoot,
-    skipQdrantSync: true,
   }));
 
   summary.parameters = await captureStage(summary, "parameters", () => refreshParametersImpl({
