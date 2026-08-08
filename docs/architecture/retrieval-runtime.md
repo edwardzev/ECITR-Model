@@ -54,6 +54,27 @@ Initial lanes are simple and explicit:
 - semantic lane
 - temporal lane
 
+The lexical, metadata, and temporal lanes use the shared `unicode-v2` retrieval
+tokenizer. The current heuristic semantic backend uses the same tokenizer, as do
+the sparse and hash-derived parts of semantic embeddings. External dense models
+continue to receive their normal raw text input.
+
+The tokenizer contract is:
+
+- preserve Unicode letters, numbers, combining marks, and underscore-delimited
+  identifiers such as `ECITR_QDRANT_URL`
+- split punctuation, slash, colon, and hyphen consistently
+- fold Latin diacritics so `Müller` and `Muller` normalize together
+- retain Hebrew, Arabic, Cyrillic, CJK, and other non-Latin scripts
+- remove only the small shared relevance stop-word set
+- retain negation such as `no` and `not`
+
+Tokenizer changes are derived-index compatibility changes. Hash and OpenAI
+hybrid embedding signatures include the tokenizer version. A local LanceDB
+basis built with the prior signature is rejected as non-current and project
+memory falls back to the file-backed heuristic backend until the derived index
+is resynced.
+
 There is no query-independent evidence fallback. Proof-oriented requests may
 increase the evidence budget, but they must not manufacture arbitrary evidence
 when no evidence record is relevant.
@@ -106,3 +127,4 @@ newer capture time winning.
 See:
 - `docs/architecture/parameter-memory.md`
 - `docs/architecture/support-graph.md`
+- `docs/adr/0011-unicode-retrieval-normalization-and-shadow-gating.md`

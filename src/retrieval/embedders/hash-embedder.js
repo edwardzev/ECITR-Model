@@ -1,4 +1,8 @@
 const crypto = require("node:crypto");
+const {
+  RETRIEVAL_TOKENIZER_ID,
+  tokenizeRetrievalText,
+} = require("../tokenizer");
 
 class HashSemanticEmbedder {
   constructor({ denseVectorSize = 16, sparseBucketCount = 2048 } = {}) {
@@ -12,7 +16,7 @@ class HashSemanticEmbedder {
 
     this.denseVectorSize = denseVectorSize;
     this.sparseBucketCount = sparseBucketCount;
-    this.embeddingSignature = `hash:${denseVectorSize}:${sparseBucketCount}`;
+    this.embeddingSignature = `hash:${RETRIEVAL_TOKENIZER_ID}:${denseVectorSize}:${sparseBucketCount}`;
   }
 
   async embedDocuments({ documents }) {
@@ -33,10 +37,7 @@ class HashSemanticEmbedder {
 }
 
 function tokenize(value) {
-  return String(value)
-    .toLowerCase()
-    .split(/[^a-z0-9_:-]+/i)
-    .filter(Boolean);
+  return tokenizeRetrievalText(value);
 }
 
 function buildDenseVector(tokens, denseVectorSize) {

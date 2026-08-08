@@ -4,6 +4,7 @@ const path = require("node:path");
 
 const { buildSemanticEmbedder } = require("../retrieval/embedders/factory");
 const { buildDefaultLanes } = require("../retrieval/lanes");
+const { RetrievalGate } = require("../retrieval/retrieval-gate");
 const { RetrievalRuntime } = require("../retrieval/runtime");
 const { HeuristicSemanticBackend } = require("../retrieval/semantic-backends/heuristic-backend");
 const {
@@ -32,11 +33,13 @@ class ProjectMemorySurface {
   constructor({
     catalog,
     retrievalRuntime,
+    retrievalGate = new RetrievalGate(),
     projectConfig = loadEcitrProjectConfig({ startDir: catalog?.rootDir }),
     artifactRoot,
   } = {}) {
     this.catalog = catalog;
     this.retrievalRuntime = retrievalRuntime;
+    this.retrievalGate = retrievalGate;
     this.projectConfig = projectConfig;
     this.artifactRoot = projectConfig
       ? path.resolve(
@@ -78,7 +81,29 @@ class ProjectMemorySurface {
       failure_retry_retrieval_mandatory: this.projectConfig.failure_retry_retrieval_mandatory,
       discretionary_only: !this.projectConfig.preflight_retrieval_mandatory
         && !this.projectConfig.failure_retry_retrieval_mandatory,
+      retrieval_gate: {
+        gate_id: this.retrievalGate.gateId,
+        mode: "shadow",
+        enforcement: "disabled",
+      },
     };
+  }
+
+  evaluateRetrievalGate({
+    query,
+    intent = "analysis",
+    trigger = "discretionary",
+  } = {}) {
+    if (!this.projectConfig) {
+      return null;
+    }
+
+    return this.retrievalGate.evaluate({
+      query,
+      intent,
+      trigger,
+      projectConfig: this.projectConfig,
+    });
   }
 
   logTaskOpportunity({ taskPacket, now = new Date() } = {}) {
@@ -103,11 +128,22 @@ class ProjectMemorySurface {
     consultTrigger,
     request = null,
     retrieval = null,
+    gateEvaluation = null,
     now = new Date(),
   } = {}) {
     if (!this.projectConfig) {
       return null;
     }
+
+    const resolvedGateEvaluation = gateEvaluation ?? (
+      request?.query
+        ? this.evaluateRetrievalGate({
+          query: request.query,
+          intent: request.intent,
+          trigger: consultTrigger,
+        })
+        : null
+    );
 
     return writeMemoryInvocation({
       artifactRoot: this.artifactRoot,
@@ -118,6 +154,7 @@ class ProjectMemorySurface {
       consultTrigger,
       request,
       retrieval,
+      gateEvaluation: resolvedGateEvaluation,
     });
   }
 
@@ -163,6 +200,11 @@ class ProjectMemorySurface {
       request.max_results_per_layer = structuredClone(maxResultsPerLayer);
     }
 
+    const gateEvaluation = this.evaluateRetrievalGate({
+      query: request.query,
+      intent: request.intent,
+      trigger,
+    });
     const catalogs = this.catalog.loadRuntimeCatalogs();
     const retrieval = await this.retrievalRuntime.execute({ request, catalogs, now });
     const invocation = this.logConsultation({
@@ -170,11 +212,13 @@ class ProjectMemorySurface {
       consultTrigger: trigger,
       request,
       retrieval,
+      gateEvaluation,
       now,
     });
 
     return {
       retrieval,
+      retrieval_gate: gateEvaluation,
       memory_surface: this.describe(),
       memory_invocation: invocation,
     };
@@ -363,6 +407,7 @@ function writeMemoryInvocation({
   consultTrigger,
   request,
   retrieval,
+  gateEvaluation = null,
 }) {
   const invocationId = buildInvocationId({
     taskId: taskPacket?.task_id ?? null,
@@ -387,6 +432,7 @@ function writeMemoryInvocation({
     preflight_retrieval_mandatory: projectConfig.preflight_retrieval_mandatory,
     failure_retry_retrieval_mandatory: projectConfig.failure_retry_retrieval_mandatory,
     request: request ? structuredClone(request) : null,
+    retrieval_gate: gateEvaluation ? structuredClone(gateEvaluation) : null,
     returned_counts: buildReturnedCounts(retrieval),
     returned_record_ids: buildReturnedRecordIds(retrieval),
     usage_recorded_at: null,
@@ -411,6 +457,7 @@ function writeMemoryInvocation({
     consult_trigger: artifact.consult_trigger,
     returned_counts: artifact.returned_counts,
     returned_record_ids: artifact.returned_record_ids,
+    retrieval_gate: artifact.retrieval_gate,
   };
 }
 

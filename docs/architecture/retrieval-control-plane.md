@@ -40,6 +40,36 @@ This does not change the control-plane contract:
 - invocation artifacts are still written for auditability
 - Qdrant remains an explicit comparison or opt-in backend
 
+## Shadow Retrieval Gate
+
+The project-memory surface evaluates `ecitr-conservative-shadow-v1` when a
+retrieval request is already being executed. The gate emits:
+
+- a proposed `retrieve` or `skip` classification
+- the policy-effective decision
+- a reason, confidence, and bounded evidence labels
+- a query-usefulness assessment
+- whether mandatory workspace policy overrode a proposed skip
+
+This gate is observation-only:
+
+- `mode` is `shadow`
+- `enforcement` is `disabled`
+- `actual_behavior` is `retrieve_always`
+- a proposed skip cannot suppress an explicit project-memory search or runtime
+  intervention
+- the gate does not create a retrieval request for a task that did not already
+  request retrieval
+
+Mandatory `preflight` and `failure_retry` policy in `ecitr.project.json` always
+produces an effective `retrieve` decision for the matching trigger. Gate output
+is stored only in the existing derived memory-invocation artifact; it does not
+become a canonical record.
+
+Enforcement requires a separate retrieval-class decision backed by labeled live
+shadow observations. Constructed benchmark success is not sufficient to let the
+gate suppress retrieval.
+
 ## Audit Mode Write Boundary
 
 `search_project_memory` is not a pure filesystem read in the current runtime.

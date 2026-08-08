@@ -17,10 +17,10 @@ The semantic backend may score or retrieve candidates, but it does not own:
 
 ## Current Runtime
 
-The current backend is `heuristic-semantic-v1`.
+The current backend is `heuristic-semantic-v2`.
 
 It uses:
-- token normalization
+- the shared Unicode-aware `unicode-v2` retrieval tokenizer
 - coarse synonym mapping
 - atomic-claim support for evidence text
 - soft overlap scoring
@@ -88,6 +88,10 @@ Changing the semantic backend must not require changes to:
 
 The backend may evolve.
 The retrieval contract may not drift with it.
+
+Sparse and deterministic hash embedding signatures include the tokenizer
+version. This prevents a derived index created with incompatible tokenization
+from being treated as current.
 
 ## Shared Export
 

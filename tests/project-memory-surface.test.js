@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 
 const { OrchestratorExecutionLoop } = require("../src/orchestrator/execution-loop");
+const { HashSemanticEmbedder } = require("../src/retrieval/embedders/hash-embedder");
 const { SemanticRetrievalBackend } = require("../src/retrieval/semantic-backend-interface");
 const { readJson } = require("../src/validation/validator");
 const { FileBackedCatalog } = require("../src/storage/file-backed-catalog");
@@ -71,12 +72,53 @@ test("search_project_memory uses workspace defaults and records discretionary co
   assert.equal(result.memory_invocation.returned_counts.cases, 1);
   assert.equal(result.retrieval.response.results.tactics[0], "tac_metadata_prune_before_vector_rank_001");
   assert.equal(result.retrieval.response.results.cases[0], "case_retrieval_scope_drift_001");
+  assert.equal(result.retrieval_gate.mode, "shadow");
+  assert.equal(result.retrieval_gate.enforcement, "disabled");
+  assert.equal(result.retrieval_gate.actual_behavior, "retrieve_always");
 
   const artifact = readJson(result.memory_invocation.artifact_path);
   assert.equal(artifact.request.workspace_id, "ecitr_model");
   assert.equal(artifact.request.project_scope, "project_family");
   assert.equal(artifact.request.intent, "analysis");
+  assert.equal(artifact.retrieval_gate.gate_id, "ecitr-conservative-shadow-v1");
   assert.deepEqual(artifact.returned_record_ids.tactics, ["tac_metadata_prune_before_vector_rank_001"]);
+});
+
+test("a shadow skip proposal cannot suppress project-memory retrieval", async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-project-memory-shadow-gate-"));
+  const catalogRoot = path.join(rootDir, ".local", "catalog");
+  seedWorkspaceMarker({ rootDir, defaultProjectScope: "project_family" });
+  const catalog = materializeExampleCatalog(catalogRoot);
+  const projectConfig = loadEcitrProjectConfig({ startDir: rootDir });
+  let retrievalCalls = 0;
+  const retrievalRuntime = {
+    async execute({ request }) {
+      retrievalCalls += 1;
+      return {
+        plan: { request_id: request.request_id },
+        response: {
+          results: { tactics: [], invariants: [], cases: [], evidence: [] },
+        },
+      };
+    },
+  };
+  const surface = new ProjectMemorySurface({
+    catalog,
+    projectConfig,
+    retrievalRuntime,
+  });
+
+  const result = await surface.searchProjectMemory({
+    query: "What is computer memory?",
+    taskPacket: loadExample("orchestrator_task_packet"),
+    now: new Date("2026-05-01T00:00:00Z"),
+  });
+
+  assert.equal(result.retrieval_gate.proposed_decision, "skip");
+  assert.equal(result.retrieval_gate.decision, "skip");
+  assert.equal(result.retrieval_gate.actual_behavior, "retrieve_always");
+  assert.equal(retrievalCalls, 1);
+  assert.ok(result.retrieval);
 });
 
 test("record_memory_usage marks when returned memory was actually used", async () => {
@@ -289,6 +331,40 @@ test("local LanceDB table detection is path based and local only", () => {
     constrainDefaultUriToDefaultCatalog: true,
   }), false);
   assert.equal(localLanceDbTableExists({ uri: "https://example.test/lancedb", tableName }), false);
+});
+
+test("project memory rejects a LanceDB basis built with the pre-Unicode hash signature", () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-project-memory-tokenizer-basis-"));
+  const tableName = "semantic_records";
+  const catalogs = buildExampleCatalog();
+  const currentSignature = new HashSemanticEmbedder().embeddingSignature;
+  fs.mkdirSync(path.join(rootDir, `${tableName}.lance`), { recursive: true });
+  writeLanceDbCatalogBasis({
+    uri: rootDir,
+    tableName,
+    catalogs,
+    embeddingSignature: "hash:16:2048",
+  });
+
+  assert.equal(localLanceDbTableExists({
+    uri: rootDir,
+    tableName,
+    catalogs,
+    expectedEmbeddingSignature: () => currentSignature,
+  }), false);
+
+  writeLanceDbCatalogBasis({
+    uri: rootDir,
+    tableName,
+    catalogs,
+    embeddingSignature: currentSignature,
+  });
+  assert.equal(localLanceDbTableExists({
+    uri: rootDir,
+    tableName,
+    catalogs,
+    expectedEmbeddingSignature: () => currentSignature,
+  }), true);
 });
 
 test("project-memory CLIs default to the marked current workspace", () => {

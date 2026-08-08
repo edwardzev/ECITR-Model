@@ -44,7 +44,8 @@
     "qdrant:status": "node src/cli/qdrant-local.js status",
     "query:support-graph": "node src/cli/query-support-graph.js",
     "qdrant:sync": "node src/cli/sync-qdrant.js",
-    "benchmark:semantic": "node src/cli/benchmark-semantic.js"
+    "benchmark:semantic": "node src/cli/benchmark-semantic.js",
+    "benchmark:retrieval-improvements": "node src/cli/benchmark-retrieval-improvements.js"
   },
   "dependencies": {
     "@lancedb/lancedb": "^0.27.2",

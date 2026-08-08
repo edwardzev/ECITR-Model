@@ -35,14 +35,21 @@ class OrchestratorExecutionLoop {
     let retrieval = null;
     let interventionResult = null;
     let memoryInvocation = null;
+    let retrievalGate = null;
 
     if (retrievalRequest) {
       retrieval = await this.retrievalRuntime.execute({ request: retrievalRequest, catalogs, now });
+      retrievalGate = this.projectMemorySurface.evaluateRetrievalGate({
+        query: retrievalRequest.query,
+        intent: retrievalRequest.intent,
+        trigger: "discretionary",
+      });
       memoryInvocation = this.projectMemorySurface.logConsultation({
         taskPacket,
         consultTrigger: "explicit_request",
         request: retrievalRequest,
         retrieval,
+        gateEvaluation: retrievalGate,
         now,
       });
     } else if (intervention) {
@@ -53,11 +60,17 @@ class OrchestratorExecutionLoop {
       });
       retrieval = interventionExecution.retrieval;
       interventionResult = interventionExecution.intervention;
+      retrievalGate = this.projectMemorySurface.evaluateRetrievalGate({
+        query: intervention.query,
+        intent: retrieval.plan.intent,
+        trigger: intervention.mode,
+      });
       memoryInvocation = this.projectMemorySurface.logConsultation({
         taskPacket,
         consultTrigger: intervention.mode,
         request: null,
         retrieval,
+        gateEvaluation: retrievalGate,
         now,
       });
     } else {
@@ -72,6 +85,7 @@ class OrchestratorExecutionLoop {
       routing_plan: routingPlan,
       retrieval,
       intervention: interventionResult,
+      retrieval_gate: retrievalGate,
       memory_surface: memorySurface,
       memory_invocation: memoryInvocation,
       next_actions: buildNextActions({
