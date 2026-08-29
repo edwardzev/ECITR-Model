@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ECITR_MODEL_ROOT="${ECITR_MODEL_ROOT:-${HOME}/ECITR-Model}"
+CLI="${ECITR_MODEL_ROOT}/src/cli/search-project-memory.js"
+
+if [[ ! -f "${CLI}" ]]; then
+  printf 'ECITR search CLI not found: %s\n' "${CLI}" >&2
+  exit 1
+fi
+
+exec node "${CLI}" "$@"

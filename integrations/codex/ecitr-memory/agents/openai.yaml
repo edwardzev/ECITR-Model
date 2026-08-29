@@ -1,0 +1,7 @@
+interface:
+  display_name: "ECITR Project Memory"
+  short_description: "Search governed cross-project implementation memory"
+  default_prompt: "Use $ecitr-memory to check governed project memory before proceeding."
+
+policy:
+  allow_implicit_invocation: true

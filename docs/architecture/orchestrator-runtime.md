@@ -55,6 +55,31 @@ Repo-local or harness integrations can use the concrete CLI surfaces:
 - `npm run search:project-memory -- --query ... --trigger discretionary|preflight|failure_retry`
 - `npm run memory:record-usage -- --invocation-id ... --used-record-ids ...`
 - `npm run memory:report-invocations`
+- `npm run memory:report-adoption -- --since ... --until ...`
+
+The generic Codex integration is versioned under
+`integrations/codex/ecitr-memory/` and installed as the discoverable
+`$ecitr-memory` skill. For each eligible substantive task, one search artifact
+is the experiment opportunity; if no search occurs, the agent writes exactly
+one no-consult opportunity instead. Every search receives exactly one usage
+callback, including an empty callback when no returned record influenced the
+work. Micro tasks and strict no-write audits create no invocation artifacts.
+
+Registered workspace routing is managed through dry-run-first surfaces:
+
+- `npm run memory:sync-markers -- --dry-run`
+- `npm run memory:sync-markers -- --apply`
+- `npm run memory:doctor`
+
+Marker synchronization preserves scope and mandatory-policy flags and changes
+only catalog routing. Equivalent relative and absolute routes are treated as
+the same location. Existing invalid, workspace-mismatched, modified, or
+untracked markers that require a route change fail closed for owner review.
+The doctor verifies marker attribution, writable metrics paths, the shared
+catalog, current support graph, the actual LanceDB table plus its current
+catalog basis, and installed skill files. Aggregate reporting excludes
+invocation artifacts whose `workspace_id` conflicts with the workspace being
+summarized and exposes an attribution-mismatch count instead.
 
 When invoked from a marked repository, these commands resolve
 `ecitr.project.json` from the current working directory. `--workspace-root`,

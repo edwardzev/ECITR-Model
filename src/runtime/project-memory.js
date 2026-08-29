@@ -659,5 +659,6 @@ module.exports = {
   findWorkspaceMarker,
   localLanceDbTableExists,
   loadEcitrProjectConfig,
+  loadMemoryInvocationArtifacts,
   summarizeMemoryInvocations,
 };
