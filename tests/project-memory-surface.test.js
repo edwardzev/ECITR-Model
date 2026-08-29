@@ -256,6 +256,71 @@ test("project memory runtime uses LanceDB semantic backend when the local table 
   assert.deepEqual(result.retrieval.response.results.evidence, [catalog.loadRuntimeCatalogs().evidence[0].evidence_id]);
 });
 
+test("project memory validates a correction-rich LanceDB basis but returns only the current leaf", async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-project-memory-corrections-"));
+  const catalogRoot = path.join(rootDir, ".local", "catalog");
+  const lancedbUri = path.join(rootDir, ".local", "lancedb");
+  const tableName = "semantic_records";
+  seedWorkspaceMarker({ rootDir, defaultProjectScope: "project_family" });
+  const catalog = materializeExampleCatalog(catalogRoot);
+  const parent = catalog.listRecords("evidence")[0];
+  const correction = {
+    ...parent,
+    evidence_id: `${parent.evidence_id}_correction`,
+    correction_of: parent.evidence_id,
+  };
+  catalog.writeRecord("evidence", correction);
+  const canonicalCatalogs = catalog.loadRuntimeCatalogs();
+  const embedder = new HashSemanticEmbedder();
+  fs.mkdirSync(path.join(lancedbUri, `${tableName}.lance`), { recursive: true });
+  writeLanceDbCatalogBasis({
+    uri: lancedbUri,
+    tableName,
+    catalogs: canonicalCatalogs,
+    embeddingSignature: embedder.embeddingSignature,
+  });
+
+  const calls = [];
+  let backendEvidenceIds = [];
+  const retrievalRuntime = createProjectMemoryRetrievalRuntime({
+    lancedbUri,
+    lancedbTableName: tableName,
+    responseEnricher: null,
+    buildEmbedder() {
+      return embedder;
+    },
+    buildLanceDbBackend({ catalogs }) {
+      calls.push("lancedb");
+      backendEvidenceIds = catalogs.evidence.map((record) => record.evidence_id);
+      return new FixedSemanticBackend({
+        record: correction,
+        layer: "evidence",
+        recordId: correction.evidence_id,
+        reason: "current correction leaf from current LanceDB basis",
+      });
+    },
+    buildFallbackBackend() {
+      calls.push("fallback");
+      return new FixedSemanticBackend({ candidates: [] });
+    },
+  });
+  const loop = new OrchestratorExecutionLoop({ catalog, retrievalRuntime });
+
+  const result = await loop.search_project_memory({
+    query: "scope filter ranking project retrieval",
+    taskPacket: loadExample("orchestrator_task_packet"),
+    allowedLayers: ["evidence"],
+    maxResultsPerLayer: { evidence: 1 },
+    now: new Date("2026-05-01T00:00:00Z"),
+  });
+
+  assert.deepEqual(calls, ["lancedb"]);
+  assert.ok(backendEvidenceIds.includes(parent.evidence_id));
+  assert.ok(backendEvidenceIds.includes(correction.evidence_id));
+  assert.deepEqual(result.retrieval.response.results.evidence, [correction.evidence_id]);
+  assert.ok(!result.retrieval.response.results.evidence.includes(parent.evidence_id));
+});
+
 test("project memory runtime falls back when no LanceDB table exists", async () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-project-memory-fallback-"));
   const catalogRoot = path.join(rootDir, ".local", "catalog");

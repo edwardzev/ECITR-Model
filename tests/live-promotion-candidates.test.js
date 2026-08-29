@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -95,7 +96,7 @@ test("live staging is idempotent for unchanged candidates", () => {
   });
   const second = stageLivePromotionCandidates({
     catalogRoot: rootDir,
-    generatedAt: "2099-01-01T00:00:00.000Z",
+    generatedAt: "2099-01-02T00:00:00.000Z",
     maxInvariantCandidates: 5,
     maxTacticCandidates: 0,
   });
@@ -103,6 +104,97 @@ test("live staging is idempotent for unchanged candidates", () => {
   assert.equal(first.invariants.written_count, 1);
   assert.equal(second.invariants.written_count, 0);
   assert.equal(second.invariants.unchanged_count, 1);
+  const [persisted] = new LivePromotionCandidateStore({
+    rootDir,
+    kind: "invariant",
+  }).listCandidates();
+  assert.equal(persisted.entry.created_at, "2099-01-01T00:00:00.000Z");
+  assert.equal(persisted.last_seen_at, "2099-01-02T00:00:00.000Z");
+});
+
+test("unchanged tactic discovery does not extend its lifecycle dates", () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-live-tactic-stage-"));
+  const catalog = new FileBackedCatalog({ rootDir });
+  catalog.writeRecord("case", makeCase({ case_id: "case_tactic_repeat_a" }));
+  catalog.writeRecord("case", makeCase({ case_id: "case_tactic_repeat_b" }));
+
+  const first = stageLivePromotionCandidates({
+    catalogRoot: rootDir,
+    generatedAt: "2099-01-01T00:00:00.000Z",
+    maxInvariantCandidates: 0,
+    maxTacticCandidates: 5,
+  });
+  const second = stageLivePromotionCandidates({
+    catalogRoot: rootDir,
+    generatedAt: "2099-01-02T00:00:00.000Z",
+    maxInvariantCandidates: 0,
+    maxTacticCandidates: 5,
+  });
+
+  assert.equal(first.tactics.written_count, 1);
+  assert.equal(second.tactics.written_count, 0);
+  assert.equal(second.tactics.unchanged_count, 1);
+  const [persisted] = new LivePromotionCandidateStore({
+    rootDir,
+    kind: "tactic",
+  }).listCandidates();
+  assert.equal(persisted.entry.created_at, "2099-01-01T00:00:00.000Z");
+  assert.equal(persisted.entry.revalidate_at, "2099-03-02T00:00:00.000Z");
+  assert.equal(persisted.last_seen_at, "2099-01-02T00:00:00.000Z");
+});
+
+test("legacy timestamp-sensitive hashes upgrade without replacing reviewed semantics", () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ecitr-live-legacy-hash-"));
+  const store = new LivePromotionCandidateStore({ rootDir, kind: "invariant" });
+  const activeCases = [
+    makeCase({ case_id: "case_legacy_hash_a" }),
+    makeCase({ case_id: "case_legacy_hash_b" }),
+  ];
+  const [generated] = buildLiveInvariantCandidates({
+    activeCases,
+    activeInvariants: [],
+    generatedAt: "2099-01-01T00:00:00.000Z",
+    maxCandidates: 5,
+  });
+  const legacyHash = hashLegacyCandidateSemantics(generated);
+  store.writeCandidate({
+    ...generated,
+    discovery_semantics_hash: legacyHash,
+  });
+  store.updateCandidate(generated.candidate_id, {
+    status: "activated",
+    entry: {
+      ...generated.entry,
+      title: "Human-reviewed narrow title",
+    },
+    decision_history: [{
+      decided_at: "2099-01-01T01:00:00.000Z",
+      decision: "activated",
+      rationale: "reviewed before hash normalization",
+    }],
+  });
+
+  const [rediscovered] = buildLiveInvariantCandidates({
+    activeCases,
+    activeInvariants: [],
+    generatedAt: "2099-01-02T00:00:00.000Z",
+    maxCandidates: 5,
+  });
+  const result = store.upsertCandidate(rediscovered);
+  const persisted = store.getCandidate(generated.candidate_id);
+
+  assert.equal(result.status, "updated");
+  assert.equal(result.changed, false);
+  assert.equal(store.listCandidates().length, 1);
+  assert.equal(persisted.status, "activated");
+  assert.equal(persisted.entry.title, "Human-reviewed narrow title");
+  assert.equal(persisted.entry.created_at, "2099-01-01T00:00:00.000Z");
+  assert.equal(persisted.last_seen_at, "2099-01-02T00:00:00.000Z");
+  assert.notEqual(persisted.discovery_semantics_hash, legacyHash);
+  assert.deepEqual(
+    persisted.decision_history.map((entry) => entry.decision),
+    ["activated"],
+  );
 });
 
 test("terminal live candidates retain decided semantics and stage changed semantics as a new revision", () => {
@@ -676,6 +768,20 @@ function makeNoisyTacticCandidate(candidateId, label) {
     revision: 1,
     decision_history: [],
   };
+}
+
+function hashLegacyCandidateSemantics(candidate) {
+  return `sha256:${crypto
+    .createHash("sha256")
+    .update(JSON.stringify({
+      workspace_id: candidate.workspace_id,
+      entry: candidate.entry,
+      source_case_refs: candidate.source_case_refs,
+      supporting_invariant_refs: candidate.supporting_invariant_refs,
+      evidence_refs: candidate.evidence_refs,
+      counterexample_case_refs: candidate.counterexample_case_refs,
+    }))
+    .digest("hex")}`;
 }
 
 function createFakeReviewSurface(kind, { promoted = [], activeRecords = [] } = {}) {

@@ -21,7 +21,11 @@ class RetrievalRuntime {
   async execute({ request, catalogs, now = new Date() }) {
     const currentCatalogs = withCurrentEvidenceRecords(catalogs);
     const plan = this.planner.plan(request);
-    const lanes = this.lanesFactory({ catalogs: currentCatalogs, plan });
+    const lanes = this.lanesFactory({
+      catalogs: currentCatalogs,
+      canonicalCatalogs: catalogs,
+      plan,
+    });
     const laneCandidates = await Promise.all(
       lanes.map((lane) => lane.execute({ request, plan, now })),
     );

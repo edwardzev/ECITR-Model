@@ -25,7 +25,8 @@ Agent-ops records resolve by:
 
 1. explicit caller override;
 2. explicit `config/workspace-source-map.json` entry;
-3. active project id or alias in the configured agent-ops project registry;
+3. project id or alias in the configured agent-ops project registry, including
+   inactive projects for historical source attribution;
 4. catalog marker fallback.
 
 Codex rollout records resolve by:
@@ -41,6 +42,14 @@ Catalog fallback is sufficient for ordinary import compatibility but is not an
 authoritative migration signal. Migration acts only on explicit source
 selectors or active registry entries. A configured but unavailable registry
 fails closed before fallback.
+
+Registry status controls active discovery, rollout, and migration targeting; it
+does not erase historical source identity. Inactive registry entries therefore
+remain valid for exact agent-ops project-id or alias attribution, while their
+workspace roots are excluded from Codex cwd discovery and registry-wide
+migration target selection. The migration CLI may repair a known inactive
+workspace only when that workspace is explicitly selected; it never adds
+inactive workspaces to the default registry-wide migration set.
 
 ## Correction Rules
 

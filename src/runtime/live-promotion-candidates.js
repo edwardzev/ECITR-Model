@@ -1189,10 +1189,8 @@ function prepareCandidateUpsert({ latest, candidate, candidateSeriesId }) {
   return {
     changed: false,
     candidate: {
-      ...latest,
-      last_seen_at: candidate.last_seen_at,
-      support_signals: candidate.support_signals,
-      discovery_semantics_hash: candidate.discovery_semantics_hash,
+      ...candidate,
+      candidate_id: latest.candidate_id,
     },
   };
 }
@@ -1200,8 +1198,7 @@ function prepareCandidateUpsert({ latest, candidate, candidateSeriesId }) {
 function withDiscoverySemanticsHash(candidate) {
   return {
     ...candidate,
-    discovery_semantics_hash: candidate.discovery_semantics_hash
-      ?? hashCandidateDiscoverySemantics(candidate),
+    discovery_semantics_hash: hashCandidateDiscoverySemantics(candidate),
   };
 }
 
@@ -1210,7 +1207,17 @@ function candidateDiscoverySemanticsEqual(left, right) {
     ?? hashCandidateDiscoverySemantics(left);
   const rightHash = right.discovery_semantics_hash
     ?? hashCandidateDiscoverySemantics(right);
-  return leftHash === rightHash;
+  if (leftHash === rightHash) {
+    return true;
+  }
+
+  // Existing candidates may carry the pre-normalization hash, which included
+  // generated lifecycle dates. Reuse the persisted dates for one compatibility
+  // comparison so the hash can be upgraded without creating a revision.
+  return Boolean(left.discovery_semantics_hash)
+    && leftHash === hashLegacyCandidateDiscoverySemantics(right, {
+      lifecycleEntry: left.entry,
+    });
 }
 
 function hashCandidateDiscoverySemantics(candidate) {
@@ -1253,9 +1260,37 @@ function candidateSemanticsEqual(left, right) {
 }
 
 function candidateSemanticProjection(candidate) {
+  const entry = { ...candidate.entry };
+  delete entry.created_at;
+  delete entry.revalidate_at;
+
+  return candidateProjectionWithEntry(candidate, entry);
+}
+
+function hashLegacyCandidateDiscoverySemantics(candidate, { lifecycleEntry } = {}) {
+  return `sha256:${crypto
+    .createHash("sha256")
+    .update(JSON.stringify(candidateLegacySemanticProjection(candidate, { lifecycleEntry })))
+    .digest("hex")}`;
+}
+
+function candidateLegacySemanticProjection(candidate, { lifecycleEntry = candidate.entry } = {}) {
+  const entry = { ...candidate.entry };
+  for (const field of ["created_at", "revalidate_at"]) {
+    if (Object.prototype.hasOwnProperty.call(lifecycleEntry ?? {}, field)) {
+      entry[field] = lifecycleEntry[field];
+    } else {
+      delete entry[field];
+    }
+  }
+
+  return candidateProjectionWithEntry(candidate, entry);
+}
+
+function candidateProjectionWithEntry(candidate, entry) {
   return {
     workspace_id: candidate.workspace_id,
-    entry: candidate.entry,
+    entry,
     source_case_refs: candidate.source_case_refs,
     supporting_invariant_refs: candidate.supporting_invariant_refs,
     evidence_refs: candidate.evidence_refs,

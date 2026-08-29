@@ -324,19 +324,19 @@ function createProjectMemoryRetrievalRuntime({
   return new RetrievalRuntime({
     responseEnricher,
     graphRoot,
-    lanesFactory({ catalogs, plan }) {
+    lanesFactory({ catalogs, canonicalCatalogs = catalogs, plan }) {
       const semanticBackend = tableExists({
         uri: effectiveLanceDbUri,
         tableName: effectiveLanceDbTableName,
-        catalogRoot: catalogs?.__catalogRoot,
-        catalogs,
+        catalogRoot: canonicalCatalogs?.__catalogRoot,
+        catalogs: canonicalCatalogs,
         expectedEmbeddingSignature: () => getEmbedder().embeddingSignature ?? null,
         constrainDefaultUriToDefaultCatalog,
       })
         ? buildLanceDbBackend({
           uri: effectiveLanceDbUri,
           tableName: effectiveLanceDbTableName,
-          catalogs,
+          catalogs: canonicalCatalogs,
           embedder: getEmbedder(),
           maximumDistance: lancedbMaximumDistance,
         })

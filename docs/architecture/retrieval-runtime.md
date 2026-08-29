@@ -75,6 +75,13 @@ basis built with the prior signature is rejected as non-current and project
 memory falls back to the file-backed heuristic backend until the derived index
 is resynced.
 
+LanceDB basis validation receives the complete immutable evidence correction
+graph. Lane-facing catalogs still contain only current correction leaves, and
+semantic export and row mapping derive the same current-only view from the full
+graph. Removing correction parents before basis validation is invalid because
+it makes a current derived index appear stale without changing what retrieval
+is allowed to return.
+
 There is no query-independent evidence fallback. Proof-oriented requests may
 increase the evidence budget, but they must not manufacture arbitrary evidence
 when no evidence record is relevant.

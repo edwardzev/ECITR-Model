@@ -16,6 +16,7 @@ function loadWorkspaceSourceMap({ filePath = DEFAULT_SOURCE_MAP_PATH } = {}) {
       agent_ops_registry_path: null,
       agent_ops_registry_available: false,
       agent_ops_registry_projects: [],
+      agent_ops_registry_all_projects: [],
       file_path: resolvedFilePath,
     };
   }
@@ -28,15 +29,19 @@ function loadWorkspaceSourceMap({ filePath = DEFAULT_SOURCE_MAP_PATH } = {}) {
   const agentOpsRegistryAvailable = Boolean(
     agentOpsRegistryPath && fs.existsSync(agentOpsRegistryPath),
   );
+  const agentOpsRegistryAllProjects = loadAgentOpsRegistryProjects({
+    filePath: agentOpsRegistryPath,
+    includeInactive: true,
+  });
   return {
     schema_version: parsed.schema_version ?? 1,
     agent_ops_projects: normalizeAgentOpsProjects(parsed.agent_ops_projects),
     codex_workspaces: normalizeCodexWorkspaces(parsed.codex_workspaces),
     agent_ops_registry_path: agentOpsRegistryPath,
     agent_ops_registry_available: agentOpsRegistryAvailable,
-    agent_ops_registry_projects: loadAgentOpsRegistryProjects({
-      filePath: agentOpsRegistryPath,
-    }),
+    agent_ops_registry_projects: agentOpsRegistryAllProjects
+      .filter((entry) => entry.status === "active"),
+    agent_ops_registry_all_projects: agentOpsRegistryAllProjects,
     file_path: resolvedFilePath,
   };
 }
@@ -75,7 +80,8 @@ function resolveWorkspaceAttributionForAgentOps({
 
   const registered = findAgentOpsRegistryProjectByIdentity({
     projectId,
-    projects: sourceMap.agent_ops_registry_projects,
+    projects: sourceMap.agent_ops_registry_all_projects
+      ?? sourceMap.agent_ops_registry_projects,
   });
   if (registered) {
     return attributionResult(registered.id, "agent_ops_registry");
@@ -232,7 +238,7 @@ function loadWorkspaceConfigForCwd({ cwd, catalogRoot, requireCatalogMatch = fal
   return projectConfig;
 }
 
-function loadAgentOpsRegistryProjects({ filePath } = {}) {
+function loadAgentOpsRegistryProjects({ filePath, includeInactive = false } = {}) {
   if (!filePath || !fs.existsSync(filePath)) {
     return [];
   }
@@ -242,14 +248,18 @@ function loadAgentOpsRegistryProjects({ filePath } = {}) {
     throw new Error(`Agent-ops project registry is missing projects: ${filePath}`);
   }
 
-  return parsed.projects
+  const projects = parsed.projects
     .map((entry) => ({
       id: normalizeWorkspaceId(entry?.id),
       status: typeof entry?.status === "string" ? entry.status.trim() : "",
       aliases: normalizeUniqueStrings(entry?.aliases),
       workspace_roots: normalizeUniquePaths(entry?.workspace_roots),
     }))
-    .filter((entry) => entry.id && entry.status === "active");
+    .filter((entry) => entry.id);
+
+  return includeInactive
+    ? projects
+    : projects.filter((entry) => entry.status === "active");
 }
 
 function findAgentOpsRegistryProjectByIdentity({ projectId, projects = [] } = {}) {

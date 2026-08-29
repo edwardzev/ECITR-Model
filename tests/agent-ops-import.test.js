@@ -26,6 +26,10 @@ test("agent-ops runs importer dry-run maps runs without writing catalog state", 
   assert.equal(result.scanned_files, 2);
   assert.equal(result.candidate_runs, 2);
   assert.equal(result.planned, 2);
+  assert.deepEqual(result.planned_evidence_ids.sort(), [
+    buildEvidenceId("run_20260410173434_mcp"),
+    buildEvidenceId("run_20260410173435_other"),
+  ].sort());
   assert.equal(result.imported, 0);
   assert.equal(result.conflicts, 0);
   assert.equal(result.errors, 0);

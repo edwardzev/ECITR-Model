@@ -1358,7 +1358,8 @@ function resolveAgentOpsProjectIds({ agentOpsProjectIds, targetWorkspaceId, sour
   const manual = sourceMap.agent_ops_projects
     .filter((entry) => entry.workspace_id === targetWorkspaceId)
     .map((entry) => entry.project_id);
-  const registered = sourceMap.agent_ops_registry_projects
+  const registered = (sourceMap.agent_ops_registry_all_projects
+    ?? sourceMap.agent_ops_registry_projects)
     .filter((entry) => entry.id === targetWorkspaceId)
     .flatMap((entry) => [entry.id, ...entry.aliases]);
   return [...new Set([...manual, ...registered])].sort();
@@ -1371,7 +1372,8 @@ function resolveCodexWorkspaceRoots({ codexWorkspaceRoots, targetWorkspaceId, so
   const manual = sourceMap.codex_workspaces
     .filter((entry) => entry.workspace_id === targetWorkspaceId)
     .map((entry) => entry.workspace_root);
-  const registered = sourceMap.agent_ops_registry_projects
+  const registered = (sourceMap.agent_ops_registry_all_projects
+    ?? sourceMap.agent_ops_registry_projects)
     .filter((entry) => entry.id === targetWorkspaceId)
     .flatMap((entry) => entry.workspace_roots);
   return [...new Set([...manual, ...registered].map((entry) => path.resolve(entry)))].sort();

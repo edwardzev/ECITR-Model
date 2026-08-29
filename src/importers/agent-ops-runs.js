@@ -66,6 +66,7 @@ function importAgentOpsRuns({
     scanned_files: runFilePaths.length,
     candidate_runs: 0,
     planned: 0,
+    planned_evidence_ids: [],
     imported: 0,
     skipped_existing: 0,
     conflicts: 0,
@@ -142,6 +143,7 @@ function importAgentOpsRuns({
 
       if (outcome.status === "planned") {
         summary.planned += 1;
+        summary.planned_evidence_ids.push(outcome.record.evidence_id);
       } else if (outcome.status === "imported") {
         summary.imported += 1;
       } else if (outcome.status === "skipped_existing") {

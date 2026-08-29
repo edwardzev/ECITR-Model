@@ -44,7 +44,12 @@ async function refreshAgentOpsIndex({
   summary.runs = importRuns(importOptions);
   assertImportSummaryClean("runs", summary.runs);
 
-  summary.sessions = importSessions(importOptions);
+  summary.sessions = importSessions({
+    ...importOptions,
+    plannedParentEvidenceIds: dryRun
+      ? summary.runs.planned_evidence_ids ?? []
+      : [],
+  });
   assertImportSummaryClean("sessions", summary.sessions);
 
   if (dryRun) {

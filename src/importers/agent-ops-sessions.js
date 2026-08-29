@@ -27,6 +27,7 @@ function importAgentOpsSessions({
   workspaceId = null,
   dryRun = true,
   limit = Number.POSITIVE_INFINITY,
+  plannedParentEvidenceIds = [],
   validator = new EcitrValidator(),
 } = {}) {
   if (!agentOpsRoot) {
@@ -35,6 +36,13 @@ function importAgentOpsSessions({
 
   if (!catalogRoot) {
     throw new Error("importAgentOpsSessions requires a catalogRoot.");
+  }
+
+  if (!Array.isArray(plannedParentEvidenceIds)) {
+    throw new Error("plannedParentEvidenceIds must be an array.");
+  }
+  if (!dryRun && plannedParentEvidenceIds.length > 0) {
+    throw new Error("plannedParentEvidenceIds is supported only for dry-run imports.");
   }
 
   assertImportLimit(limit);
@@ -53,6 +61,7 @@ function importAgentOpsSessions({
   });
   const payloadStore = new FilePayloadStore({ rootDir: resolvedCatalogRoot });
   const evidenceCorrectionIndex = buildEvidenceCorrectionIndex(catalog.listRecords("evidence"));
+  const plannedParentEvidenceIdSet = new Set(plannedParentEvidenceIds);
   const caseSeedStore = new CaseSeedStore({
     rootDir: resolvedCatalogRoot,
     validator,
@@ -150,6 +159,7 @@ function importAgentOpsSessions({
         validator,
         workspaceId: resolvedWorkspaceId,
         evidenceCorrectionIndex,
+        plannedParentEvidenceIdSet,
       });
 
       if (outcome.status === "planned") {
@@ -202,6 +212,7 @@ function importSingleSession({
   validator,
   workspaceId,
   evidenceCorrectionIndex,
+  plannedParentEvidenceIdSet,
 }) {
   const payloadPlan = payloadStore.planPayload({
     evidenceId,
@@ -210,7 +221,11 @@ function importSingleSession({
     namespaceSegments: PAYLOAD_NAMESPACE_SEGMENTS,
     bytes: sourceBytes,
   });
-  const parentEvidenceId = resolveParentEvidenceId(sessionRecord, catalog);
+  const parentEvidenceId = resolveParentEvidenceId(
+    sessionRecord,
+    catalog,
+    plannedParentEvidenceIdSet,
+  );
   const record = buildEvidenceRecordFromSession({
     sessionRecord,
     sourcePath: sessionFilePath,
@@ -307,7 +322,7 @@ function buildSessionEvidenceId(sessionId) {
   return `ev_aops_session_${sessionId}`;
 }
 
-function resolveParentEvidenceId(sessionRecord, catalog) {
+function resolveParentEvidenceId(sessionRecord, catalog, plannedParentEvidenceIds = new Set()) {
   if (!sessionRecord.run_ref) {
     return null;
   }
@@ -315,7 +330,7 @@ function resolveParentEvidenceId(sessionRecord, catalog) {
   const runId = path.basename(sessionRecord.run_ref, ".json");
   const parentEvidenceId = buildRunEvidenceId(runId);
   const parentRecord = catalog.getRecord("evidence", parentEvidenceId);
-  if (!parentRecord) {
+  if (!parentRecord && !plannedParentEvidenceIds.has(parentEvidenceId)) {
     throw new Error(
       `Linked run evidence is missing for session ${sessionRecord.id}: ${parentEvidenceId}`,
     );

@@ -26,11 +26,14 @@ function migrateRegisteredWorkspaceAttribution({
   }
 
   const availableWorkspaceIds = collectConfiguredWorkspaceIds(sourceMap);
+  const selectableWorkspaceIds = collectConfiguredWorkspaceIds(sourceMap, {
+    includeInactiveRegistry: true,
+  });
   const selectedWorkspaceIds = workspaceIds.length > 0
     ? [...new Set(workspaceIds)].sort()
     : availableWorkspaceIds;
   const unknown = selectedWorkspaceIds.filter((workspaceId) =>
-    !availableWorkspaceIds.includes(workspaceId));
+    !selectableWorkspaceIds.includes(workspaceId));
   if (unknown.length > 0) {
     throw new Error(`Workspace attribution selectors are not configured for: ${unknown.join(", ")}`);
   }
@@ -111,11 +114,14 @@ function assertDisjointMigrationTargets(plans) {
   }
 }
 
-function collectConfiguredWorkspaceIds(sourceMap) {
+function collectConfiguredWorkspaceIds(sourceMap, { includeInactiveRegistry = false } = {}) {
+  const registryProjects = includeInactiveRegistry
+    ? sourceMap.agent_ops_registry_all_projects ?? sourceMap.agent_ops_registry_projects
+    : sourceMap.agent_ops_registry_projects;
   return [...new Set([
     ...sourceMap.agent_ops_projects.map((entry) => entry.workspace_id),
     ...sourceMap.codex_workspaces.map((entry) => entry.workspace_id),
-    ...sourceMap.agent_ops_registry_projects.map((entry) => entry.id),
+    ...registryProjects.map((entry) => entry.id),
   ].filter(Boolean))].sort();
 }
 

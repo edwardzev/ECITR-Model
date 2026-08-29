@@ -37,6 +37,46 @@ test("agent-ops sessions importer maps terminal sessions and skips active sessio
   );
 });
 
+test("agent-ops sessions dry-run accepts exact parent runs planned in the same refresh", () => {
+  const { agentOpsRoot, catalogRoot } = createImportFixture();
+
+  const result = importAgentOpsSessions({
+    agentOpsRoot,
+    catalogRoot,
+    dryRun: true,
+    plannedParentEvidenceIds: ["ev_aops_run_run_20260410173434_mcp"],
+  });
+
+  assert.equal(result.planned, 2);
+  assert.equal(result.conflicts, 0);
+  assert.equal(result.errors, 0);
+  assert.equal(fs.existsSync(path.join(catalogRoot, "evidence")), false);
+});
+
+test("agent-ops sessions reject planned parent simulation in write mode", () => {
+  const { agentOpsRoot, catalogRoot } = createImportFixture();
+
+  assert.throws(() => importAgentOpsSessions({
+    agentOpsRoot,
+    catalogRoot,
+    dryRun: false,
+    plannedParentEvidenceIds: ["ev_aops_run_run_20260410173434_mcp"],
+  }), /supported only for dry-run imports/);
+  assert.equal(fs.existsSync(path.join(catalogRoot, "evidence")), false);
+});
+
+test("agent-ops sessions reject non-array planned parent collections", () => {
+  const { agentOpsRoot, catalogRoot } = createImportFixture();
+
+  assert.throws(() => importAgentOpsSessions({
+    agentOpsRoot,
+    catalogRoot,
+    dryRun: false,
+    plannedParentEvidenceIds: new Set(["ev_aops_run_run_20260410173434_mcp"]),
+  }), /must be an array/);
+  assert.equal(fs.existsSync(path.join(catalogRoot, "evidence")), false);
+});
+
 test("agent-ops sessions importer writes supporting evidence with parent links", () => {
   const { agentOpsRoot, catalogRoot, sessionFilePath } = createImportFixture();
   seedRunsIntoCatalog({ agentOpsRoot, catalogRoot });

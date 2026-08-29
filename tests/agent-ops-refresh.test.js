@@ -48,10 +48,16 @@ test("agent-ops refresh dry-run skips catalog loading", async () => {
     dryRun: true,
     importRuns(options) {
       calls.push({ step: "runs", dryRun: options.dryRun });
-      return { errors: 0, conflicts: 0, planned: 2 };
+      return {
+        errors: 0,
+        conflicts: 0,
+        planned: 2,
+        planned_evidence_ids: ["ev_aops_run_planned"],
+      };
     },
     importSessions(options) {
       calls.push({ step: "sessions", dryRun: options.dryRun });
+      assert.deepEqual(options.plannedParentEvidenceIds, ["ev_aops_run_planned"]);
       return { errors: 0, conflicts: 0, planned: 3, skipped_non_terminal: 1 };
     },
     loadCatalogs() {

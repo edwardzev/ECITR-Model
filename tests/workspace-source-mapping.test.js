@@ -27,6 +27,47 @@ test("workspace source map resolves registered project ids and aliases", () => {
   }), "project_alpha");
 });
 
+test("agent-ops attribution preserves inactive historical project identity", () => {
+  const fixture = createSourceMapFixture();
+  const sourceMap = loadWorkspaceSourceMap({ filePath: fixture.sourceMapPath });
+
+  assert.deepEqual(
+    sourceMap.agent_ops_registry_projects.map((entry) => entry.id),
+    ["project_alpha"],
+  );
+  assert.deepEqual(
+    sourceMap.agent_ops_registry_all_projects.map((entry) => entry.id),
+    ["project_alpha", "inactive_project"],
+  );
+  assert.deepEqual(resolveWorkspaceAttributionForAgentOps({
+    projectId: "inactive_project",
+    sourceMap,
+  }), {
+    workspace_id: "inactive_project",
+    source: "agent_ops_registry",
+    authoritative: true,
+  });
+});
+
+test("inactive registry workspaces stay excluded from Codex discovery and root lookup", () => {
+  const fixture = createSourceMapFixture();
+  const sourceMap = loadWorkspaceSourceMap({ filePath: fixture.sourceMapPath });
+
+  assert.deepEqual(resolveWorkspaceAttributionForCodex({
+    cwd: path.join(fixture.rootDir, "inactive", "src"),
+    catalogRoot: fixture.centralCatalogRoot,
+    sourceMap,
+  }), {
+    workspace_id: null,
+    source: "catalog_fallback",
+    authoritative: false,
+  });
+  assert.equal(resolveWorkspaceRootForWorkspaceId({
+    workspaceId: "inactive_project",
+    sourceMap,
+  }), null);
+});
+
 test("codex attribution accepts a workspace marker independently of catalog routing", () => {
   const fixture = createSourceMapFixture();
   writeJson(path.join(fixture.workspaceRoot, "ecitr.project.json"), {
