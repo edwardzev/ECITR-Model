@@ -29,6 +29,22 @@ Run from the project workspace so marker discovery and workspace attribution rem
 
 Use `--trigger preflight` or `--trigger failure_retry` only when that is the actual reason for consultation. Keep queries concrete and scoped; do not treat broad lexical matches as proof.
 
+## Read Selected Records
+
+Select up to five literal IDs from that invocation's `returned_record_ids`, read their content, then assess applicability against current source truth before reporting use:
+
+```bash
+~/.codex/skills/ecitr-memory/scripts/read_project_memory_records \
+  --invocation-id "meminv_..." \
+  --record-ids "case_...,tac_..."
+```
+
+The reader returns complete eligible case/invariant/tactic records. Evidence defaults to metadata. To request one catalog-owned evidence excerpt, include that returned evidence ID in `--record-ids` and add `--evidence-id "ev_..." --start-line 1 --end-line 20`. Lines are one-based and inclusive; the reader preserves exact bytes and verifies the sidecar payload hash. It does not follow live source locators.
+
+Read results can be `available`, `empty`, `denied`, or `stale`. Do not substitute a correction or treat denied/budget-limited content as inspected. `legacy_unpinned` means current content was checked but its retrieval-time match is unknown; an invocation without its original request is denied. Respect prerequisites, negative applicability, fallbacks and rollback in the complete record.
+
+Reading updates the same invocation with a preparation receipt. It does not prove host delivery, agent attention, use, usefulness, or execution authority. It does not set usage fields. Identical reads reuse a receipt; at most 20 distinct receipts are retained, with no eviction. The CLI emits no body if receipt persistence fails. Reader updates are also prohibited in a strict no-write audit.
+
 ## Record Outcome
 
 After every search, call the usage wrapper exactly once with the returned `memory_invocation.invocation_id`. Include only record IDs that materially influenced the work. Call it even when no record was used:

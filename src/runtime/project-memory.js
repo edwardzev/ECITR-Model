@@ -1,6 +1,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { TextDecoder } = require("node:util");
 
 const { buildSemanticEmbedder } = require("../retrieval/embedders/factory");
 const { buildDefaultLanes } = require("../retrieval/lanes");
@@ -16,6 +17,14 @@ const {
 const { REPO_ROOT } = require("../validation/schema-registry");
 const { readJson } = require("../validation/validator");
 const {
+  READER_LIMITS,
+  assertBoundedString,
+  buildRetrievalBasis,
+  prepareSelectedRecords,
+  readerError,
+  validateSelection,
+} = require("./project-memory-reader");
+const {
   WORKSPACE_MARKER_FILENAME,
   assertCatalogRootMatches,
   findWorkspaceMarker,
@@ -23,6 +32,9 @@ const {
 } = require("../workspace/config");
 const DEFAULT_MEMORY_TOOL_NAME = "search_project_memory";
 const DEFAULT_MEMORY_USAGE_TOOL_NAME = "record_memory_usage";
+const DEFAULT_MEMORY_READER_TOOL_NAME = "read_project_memory_records";
+const INVOCATION_UPDATE_WAIT_MS = 2000;
+const MAX_INVOCATION_BYTES = 4 * 1024 * 1024;
 const MEMORY_CONSULT_TRIGGERS = Object.freeze([
   "discretionary",
   "preflight",
@@ -66,6 +78,7 @@ class ProjectMemorySurface {
         available: false,
         tool_name: DEFAULT_MEMORY_TOOL_NAME,
         usage_tool_name: DEFAULT_MEMORY_USAGE_TOOL_NAME,
+        reader_tool_name: DEFAULT_MEMORY_READER_TOOL_NAME,
       };
     }
 
@@ -73,6 +86,7 @@ class ProjectMemorySurface {
       available: true,
       tool_name: DEFAULT_MEMORY_TOOL_NAME,
       usage_tool_name: DEFAULT_MEMORY_USAGE_TOOL_NAME,
+      reader_tool_name: DEFAULT_MEMORY_READER_TOOL_NAME,
       marker_path: this.projectConfig.marker_path,
       catalog_root: this.projectConfig.catalog_root,
       workspace_id: this.projectConfig.workspace_id,
@@ -128,6 +142,7 @@ class ProjectMemorySurface {
     consultTrigger,
     request = null,
     retrieval = null,
+    catalogs,
     gateEvaluation = null,
     now = new Date(),
   } = {}) {
@@ -154,6 +169,7 @@ class ProjectMemorySurface {
       consultTrigger,
       request,
       retrieval,
+      catalogs,
       gateEvaluation: resolvedGateEvaluation,
     });
   }
@@ -212,6 +228,7 @@ class ProjectMemorySurface {
       consultTrigger: trigger,
       request,
       retrieval,
+      catalogs,
       gateEvaluation,
       now,
     });
@@ -228,6 +245,44 @@ class ProjectMemorySurface {
     return this.searchProjectMemory(args);
   }
 
+  readProjectMemoryRecords({ invocationId, recordIds, evidenceExcerpt = null, now = new Date() } = {}) {
+    validateSelection({ recordIds, evidenceExcerpt });
+    if (!this.projectConfig || !this.catalog) throw readerError("project_memory_not_configured");
+    return updateMemoryInvocation({
+      artifactRoot: this.artifactRoot,
+      invocationId,
+      update: (artifact) => {
+        const currentConfig = this.projectConfig.marker_path
+          ? loadEcitrProjectConfig({ filePath: this.projectConfig.marker_path })
+          : this.projectConfig;
+        assertReaderBinding({ artifact, projectConfig: currentConfig, catalog: this.catalog });
+        const prepared = prepareSelectedRecords({ catalog: this.catalog, artifact, recordIds, evidenceExcerpt, now });
+        const receipts = artifact.read_receipts ?? [];
+        if (!Array.isArray(receipts) || receipts.length > READER_LIMITS.receipts
+          || receipts.some((receipt) => !/^read_[a-f0-9]{64}$/.test(receipt?.receipt_id ?? "")
+            || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(receipt?.prepared_at ?? ""))
+          || new Set(receipts.map((receipt) => receipt.receipt_id)).size !== receipts.length) {
+          throw readerError("invalid_read_receipts");
+        }
+        const existing = receipts.find((receipt) => receipt.receipt_id === prepared.receipt.receipt_id);
+        if (existing) {
+          prepared.response.receipt.prepared_at = existing.prepared_at;
+          prepared.response.receipt.reused = true;
+          return { result: prepared.response };
+        }
+        if (receipts.length === READER_LIMITS.receipts) throw readerError("read_receipt_cap_reached");
+        return {
+          nextArtifact: { ...artifact, read_receipts: [...receipts, prepared.receipt] },
+          result: prepared.response,
+        };
+      },
+    });
+  }
+
+  read_project_memory_records(args) {
+    return this.readProjectMemoryRecords(args);
+  }
+
   recordMemoryUsage({
     invocationId,
     usedRecordIds = [],
@@ -241,37 +296,35 @@ class ProjectMemorySurface {
       throw new Error("Project memory is not configured for this workspace.");
     }
 
-    const artifactPath = findInvocationArtifactPath({
+    return updateMemoryInvocation({
       artifactRoot: this.artifactRoot,
       invocationId,
+      update: (artifact, artifactPath) => {
+        if (artifact.workspace_id !== this.projectConfig.workspace_id) throw readerError("invocation_workspace_mismatch");
+        const returnedRecordIds = new Set(flattenReturnedRecordIds(artifact.returned_record_ids));
+        const normalizedUsedRecordIds = normalizeUniqueStrings(usedRecordIds);
+        const normalizedSelectedRecordIds = normalizeUniqueStrings(selectedRecordIds);
+        const usedReturnedRecordIds = normalizedUsedRecordIds.filter((recordId) => returnedRecordIds.has(recordId));
+        const nextArtifact = {
+          ...artifact,
+          usage_recorded_at: now.toISOString(),
+          used_record_ids: normalizedUsedRecordIds,
+          selected_record_ids: normalizedSelectedRecordIds,
+          used_returned_record_ids: usedReturnedRecordIds,
+          used_memory: usedReturnedRecordIds.length > 0,
+        };
+        return {
+          nextArtifact,
+          result: {
+            invocation_id: nextArtifact.invocation_id,
+            artifact_path: artifactPath,
+            used_memory: nextArtifact.used_memory,
+            used_returned_record_ids: nextArtifact.used_returned_record_ids,
+            selected_record_ids: nextArtifact.selected_record_ids,
+          },
+        };
+      },
     });
-    if (!artifactPath) {
-      throw new Error(`Memory invocation artifact not found: ${invocationId}`);
-    }
-
-    const artifact = readJson(artifactPath);
-    const returnedRecordIds = new Set(flattenReturnedRecordIds(artifact.returned_record_ids));
-    const normalizedUsedRecordIds = normalizeUniqueStrings(usedRecordIds);
-    const normalizedSelectedRecordIds = normalizeUniqueStrings(selectedRecordIds);
-    const usedReturnedRecordIds = normalizedUsedRecordIds.filter((recordId) => returnedRecordIds.has(recordId));
-
-    const nextArtifact = {
-      ...artifact,
-      usage_recorded_at: now.toISOString(),
-      used_record_ids: normalizedUsedRecordIds,
-      selected_record_ids: normalizedSelectedRecordIds,
-      used_returned_record_ids: usedReturnedRecordIds,
-      used_memory: usedReturnedRecordIds.length > 0,
-    };
-    writeJson(artifactPath, nextArtifact);
-
-    return {
-      invocation_id: nextArtifact.invocation_id,
-      artifact_path: artifactPath,
-      used_memory: nextArtifact.used_memory,
-      used_returned_record_ids: nextArtifact.used_returned_record_ids,
-      selected_record_ids: nextArtifact.selected_record_ids,
-    };
   }
 
   record_memory_usage(args) {
@@ -407,6 +460,7 @@ function writeMemoryInvocation({
   consultTrigger,
   request,
   retrieval,
+  catalogs,
   gateEvaluation = null,
 }) {
   const invocationId = buildInvocationId({
@@ -441,6 +495,8 @@ function writeMemoryInvocation({
     used_returned_record_ids: [],
     used_memory: false,
   };
+  const retrievalBasis = buildRetrievalBasis(artifact.returned_record_ids, catalogs);
+  if (retrievalBasis) artifact.retrieval_basis = retrievalBasis;
 
   const artifactPath = buildArtifactPath({
     artifactRoot,
@@ -602,10 +658,13 @@ function buildArtifactPath({ artifactRoot, invocationId, consultedAt }) {
 }
 
 function findInvocationArtifactPath({ artifactRoot, invocationId }) {
+  assertBoundedString(invocationId, 136, "invalid_invocation_id");
+  if (!/^meminv_[A-Za-z0-9_-]+$/.test(invocationId)) throw readerError("invalid_invocation_id");
   if (!fs.existsSync(artifactRoot)) {
     return null;
   }
 
+  const matches = [];
   const yearDirs = fs.readdirSync(artifactRoot, { withFileTypes: true });
   for (const yearEntry of yearDirs) {
     if (!yearEntry.isDirectory()) {
@@ -619,12 +678,140 @@ function findInvocationArtifactPath({ artifactRoot, invocationId }) {
       }
       const candidate = path.join(yearPath, monthEntry.name, `${invocationId}.json`);
       if (fs.existsSync(candidate)) {
-        return candidate;
+        matches.push(candidate);
       }
     }
   }
 
-  return null;
+  if (matches.length > 1) throw readerError("duplicate_invocation_matches");
+  return matches[0] ?? null;
+}
+
+function assertReaderBinding({ artifact, projectConfig, catalog }) {
+  if (artifact.memory_consulted !== true || artifact.tool_name !== DEFAULT_MEMORY_TOOL_NAME) throw readerError("not_a_consultation");
+  if (!artifact.request) throw readerError("missing_retrieval_request");
+  try { catalog.validator.validateRecord("retrieval_request", artifact.request); }
+  catch { throw readerError("invalid_retrieval_request"); }
+  assertBoundedString(artifact.workspace_id, 128, "invalid_invocation_workspace");
+  if (artifact.workspace_id !== projectConfig.workspace_id
+    || artifact.request.workspace_id !== projectConfig.workspace_id) throw readerError("invocation_workspace_mismatch");
+  if (artifact.catalog_root !== projectConfig.catalog_root || catalog.rootDir !== projectConfig.catalog_root) throw readerError("invocation_catalog_mismatch");
+  if (artifact.marker_path !== projectConfig.marker_path
+    || artifact.default_project_scope !== projectConfig.default_project_scope) throw readerError("invocation_marker_mismatch");
+}
+
+function updateMemoryInvocation({ artifactRoot, invocationId, update }) {
+  const artifactPath = findInvocationArtifactPath({ artifactRoot, invocationId });
+  if (!artifactPath) throw readerError("invocation_not_found");
+  const root = fs.realpathSync(artifactRoot);
+  const realArtifactPath = fs.realpathSync(artifactPath);
+  const relative = path.relative(root, realArtifactPath);
+  const expectedPath = path.join(root, path.relative(path.resolve(artifactRoot), artifactPath));
+  if (realArtifactPath !== expectedPath || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw readerError("unsafe_invocation_path");
+  }
+  const lockPath = `${artifactPath}.lock`;
+  const deadline = Date.now() + INVOCATION_UPDATE_WAIT_MS;
+  const waitBuffer = new Int32Array(new SharedArrayBuffer(4));
+  let descriptor;
+  while (descriptor === undefined) {
+    try { descriptor = fs.openSync(lockPath, "wx", 0o600); }
+    catch (error) {
+      if (error.code !== "EEXIST") throw readerError("invocation_lock_failed");
+      if (Date.now() >= deadline) throw readerError("invocation_update_contended");
+      Atomics.wait(waitBuffer, 0, 0, 20);
+    }
+  }
+  const ownedLock = fs.fstatSync(descriptor);
+  try {
+    if (findInvocationArtifactPath({ artifactRoot, invocationId }) !== artifactPath
+      || fs.realpathSync(artifactPath) !== realArtifactPath) throw readerError("invocation_changed_during_update");
+    const snapshot = readInvocationSnapshot(artifactPath, realArtifactPath);
+    const artifact = JSON.parse(snapshot.text);
+    if (artifact.invocation_id !== invocationId) throw readerError("invocation_identity_mismatch");
+    const { nextArtifact, result } = update(artifact, artifactPath);
+    if (nextArtifact) replaceInvocationAtomically(artifactPath, nextArtifact, snapshot);
+    else assertInvocationSnapshotUnchanged(artifactPath, snapshot);
+    return result;
+  } finally {
+    try {
+      const currentLock = fs.lstatSync(lockPath);
+      if (currentLock.ino === ownedLock.ino && currentLock.dev === ownedLock.dev) fs.unlinkSync(lockPath);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    } finally { fs.closeSync(descriptor); }
+  }
+}
+
+function sameInvocationFileState(left, right) {
+  return left.isFile() && right.isFile() && left.ino === right.ino && left.dev === right.dev
+    && left.size === right.size && left.mtimeMs === right.mtimeMs && left.ctimeMs === right.ctimeMs;
+}
+
+function readInvocationSnapshot(artifactPath, realArtifactPath) {
+  let descriptor;
+  try {
+    const pathStat = fs.lstatSync(artifactPath);
+    if (!pathStat.isFile() || pathStat.size > MAX_INVOCATION_BYTES) throw readerError("invalid_invocation_artifact");
+    descriptor = fs.openSync(artifactPath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    const stat = fs.fstatSync(descriptor);
+    if (!sameInvocationFileState(pathStat, stat) || fs.realpathSync(artifactPath) !== realArtifactPath) {
+      throw readerError("invocation_changed_during_update");
+    }
+    if (stat.size > MAX_INVOCATION_BYTES) throw readerError("invalid_invocation_artifact");
+    const buffer = Buffer.alloc(stat.size + 1);
+    let length = 0;
+    while (length < buffer.length) {
+      const count = fs.readSync(descriptor, buffer, length, buffer.length - length, null);
+      if (!count) break;
+      length += count;
+    }
+    if (length !== stat.size || !sameInvocationFileState(stat, fs.fstatSync(descriptor))
+      || !sameInvocationFileState(stat, fs.lstatSync(artifactPath))
+      || fs.realpathSync(artifactPath) !== realArtifactPath) throw readerError("invocation_changed_during_update");
+    const bytes = buffer.subarray(0, length);
+    let text;
+    try { text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes); }
+    catch { throw readerError("invalid_invocation_utf8"); }
+    return { bytes, text, stat, realArtifactPath };
+  } catch (error) {
+    if (error.code && !/^[A-Z]/.test(error.code)) throw error;
+    if (["ENOENT", "ELOOP"].includes(error.code)) throw readerError("invocation_changed_during_update");
+    throw readerError("invocation_read_failed");
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+  }
+}
+
+function assertInvocationSnapshotUnchanged(artifactPath, snapshot) {
+  try {
+    const current = readInvocationSnapshot(artifactPath, snapshot.realArtifactPath);
+    if (!sameInvocationFileState(snapshot.stat, current.stat) || !snapshot.bytes.equals(current.bytes)) {
+      throw readerError("invocation_changed_during_update");
+    }
+  } catch { throw readerError("invocation_changed_during_update"); }
+}
+
+function replaceInvocationAtomically(artifactPath, artifact, snapshot) {
+  const tempPath = `${artifactPath}.${crypto.randomUUID()}.tmp`;
+  let descriptor;
+  try {
+    const bytes = Buffer.from(`${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+    if (bytes.length > MAX_INVOCATION_BYTES) throw readerError("invocation_budget_exceeded");
+    descriptor = fs.openSync(tempPath, "wx", 0o600);
+    fs.writeFileSync(descriptor, bytes);
+    fs.fsyncSync(descriptor);
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    assertInvocationSnapshotUnchanged(artifactPath, snapshot);
+    fs.renameSync(tempPath, artifactPath);
+  } catch (error) {
+    if (error.code === "invocation_changed_during_update") throw error;
+    throw readerError("invocation_persistence_failed");
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+    if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+  }
 }
 
 function flattenReturnedRecordIds(returnedRecordIds = {}) {
@@ -651,6 +838,7 @@ function writeJson(filePath, value) {
 module.exports = {
   DEFAULT_MEMORY_TOOL_NAME,
   DEFAULT_MEMORY_USAGE_TOOL_NAME,
+  DEFAULT_MEMORY_READER_TOOL_NAME,
   MEMORY_CONSULT_TRIGGERS,
   ProjectMemorySurface,
   WORKSPACE_MARKER_FILENAME,

@@ -14,6 +14,7 @@
     "refresh:agent-ops": "node src/cli/refresh-agent-ops.js",
     "refresh:codex": "node src/cli/refresh-codex.js",
     "search:project-memory": "node src/cli/search-project-memory.js",
+    "memory:read-records": "node src/cli/read-project-memory-records.js",
     "memory:log-opportunity": "node src/cli/log-memory-opportunity.js",
     "memory:record-usage": "node src/cli/record-memory-usage.js",
     "memory:report-invocations": "node src/cli/report-memory-invocations.js",

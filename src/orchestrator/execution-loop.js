@@ -49,6 +49,7 @@ class OrchestratorExecutionLoop {
         consultTrigger: "explicit_request",
         request: retrievalRequest,
         retrieval,
+        catalogs,
         gateEvaluation: retrievalGate,
         now,
       });
@@ -70,6 +71,7 @@ class OrchestratorExecutionLoop {
         consultTrigger: intervention.mode,
         request: null,
         retrieval,
+        catalogs,
         gateEvaluation: retrievalGate,
         now,
       });
@@ -127,6 +129,14 @@ class OrchestratorExecutionLoop {
 
   async search_project_memory(args) {
     return this.searchProjectMemory(args);
+  }
+
+  readProjectMemoryRecords(args) {
+    return this.projectMemorySurface.readProjectMemoryRecords(args);
+  }
+
+  read_project_memory_records(args) {
+    return this.readProjectMemoryRecords(args);
   }
 
   recordMemoryUsage(args) {

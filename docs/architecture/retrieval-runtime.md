@@ -46,6 +46,111 @@ The intervention layer does not:
 - expose support records as new public result groups
 - change ranking authority or bypass freshness, scope, or approval gates
 
+## Selected-Record Reader
+
+`ProjectMemorySurface.readProjectMemoryRecords` (alias
+`read_project_memory_records`) is the explicit read step after a consultation.
+It accepts `invocationId`, ordered `recordIds`, and an optional
+`evidenceExcerpt: { recordId, startLine, endLine }`. The execution loop exposes
+the same passthrough. CLI and installed-style wrapper entry points are:
+
+```bash
+npm run memory:read-records -- --invocation-id meminv_... --record-ids case_...,ev_...
+~/.codex/skills/ecitr-memory/scripts/read_project_memory_records \
+  --invocation-id meminv_... --record-ids ev_... \
+  --evidence-id ev_... --start-line 1 --end-line 20
+```
+
+Run from the marked workspace, or supply `--workspace-root`. Explicit
+`--workspace-id` and `--catalog-root` must match current marker routing.
+`ECITR_MODEL_ROOT` selects the wrapper's source checkout for isolated testing.
+The reader requires one unambiguous consultation, its original valid request,
+matching workspace/catalog/marker scope, and one to five distinct literal IDs
+from its layer-grouped returned IDs. Effective allowed layers come from the
+existing planner, including policy-required evidence for audit/verification.
+It does not rerank or substitute unreturned corrections. IDs are limited to
+160 UTF-8 bytes, invocation IDs to 136, and catalog-relative source references
+to 1024; oversized or malformed input metadata is rejected, not truncated.
+
+New consultations retain `retrieval_basis` from the catalog snapshot already
+used for retrieval. `ecitr-structural-json-v1` recursively sorts object keys,
+preserves array order and parsed values, serializes with compact `JSON.stringify`,
+and hashes the UTF-8 bytes with SHA-256. Basis entries retain the actual version
+where defined. Read-time structural hashes and versions must match that basis.
+Raw canonical-file hashes remain distinct from structural hashes. A valid
+legacy consultation without basis may return eligible current content as
+`legacy_unpinned`, with `retrieval_time_match: unknown`. A request-null invocation
+is denied; historical scope is never reconstructed.
+
+Before disclosure, the reader rechecks owner schema/lifecycle validators,
+workspace eligibility, active case approval, tactic freshness and the complete
+evidence-correction graph. Invalid graphs fail closed. Selected corrected
+evidence is `stale`; the newer leaf is not substituted. Stored blocked project
+scope is denied even for a global request. This is a reader disclosure gate,
+not a repair of the broader retrieval scope helper.
+
+Successful results carry complete `record` bodies for cases, invariants and
+tactics, preserving constraints, negative applicability, prerequisites,
+fallbacks, rollback and literal absence. Evidence defaults to canonical metadata
+(`content_kind: evidence_metadata`); it does not read a payload by default.
+An explicit excerpt reads only a catalog-owned `payloads/evidence/` sidecar,
+checks real-path containment, verifies its stored `payload_hash`, and returns
+the exact decoded bytes in `excerpt`. It never follows `source_locator`.
+`source_hash_verified: false` identifies the stored upstream hash as an
+unverified claim, even when the sidecar payload hash is verified.
+
+`source`, `payload_source` and `excerpt_source` identify their own catalog files
+with `catalog_ref`, `sha256`, zero-based `byte_start`/exclusive `byte_end`,
+one-based inclusive `start_line`/`end_line`, and `total_lines`. Canonical spans
+cover the full source file. Payload and excerpt hashes identify their respective
+byte snapshots. LF terminates its preceding line; CRLF is preserved, terminal
+LF creates no extra empty line, and an empty file has zero lines. Invalid UTF-8,
+out-of-range excerpts, and excerpts over 80 lines or 8 KiB are denied.
+
+Every selected canonical file and the optional payload is bounded to 1 MiB
+before reading; hashes, decoding and spans use the same in-memory byte snapshot.
+Nonregular sources are rejected before reading; nonblocking opens also prevent
+a concurrent replacement with a FIFO from waiting for a writer.
+Oversized sources return `input_budget_exceeded`. Complete correction-graph
+validation reads every canonical evidence file on each call, with the same
+per-file limit; neither total evidence file count nor total I/O is bounded by
+that limit. This version establishes no production latency or total-work bound.
+
+The entire compact JSON CLI response, excluding only its final newline, is
+limited to 64 KiB. All result/receipt/envelope metadata is reserved before bodies
+are considered in caller order. A body that does not fit returns `denied` with
+`budget_exceeded`; operative constraints are never silently shortened. Each
+result has `record_id`, `layer`, `result` (`available`, `empty`, `denied`, `stale`),
+`reason`, `basis_state`, `content_kind`, and available source/hash/version
+metadata. Missing sources are `empty`; none of these states implies attention
+or applicability to a live task.
+
+The same invocation retains at most 20 distinct `read_receipts`, containing
+selection/excerpt request, result metadata, hashes/spans and `prepared_at`, but
+no body or excerpt text. The duplicate key includes ordered selection, excerpt
+request, snapshot hashes/basis states and outcome reasons, excluding timestamps.
+Identical reads reuse the existing receipt, including at the cap. A further
+distinct read fails explicitly without evicting history. Reading never sets
+`used_record_ids`, `selected_record_ids` or `used_memory`. The separate usage
+callback remains a self-report; it may be empty or retain legacy meaning without
+a receipt. A receipt proves preparation, not host delivery, attention or use.
+
+Reader and usage updates share a per-invocation exclusive lock, reload current
+state under it, preserve unknown fields, and persist through a flushed temporary
+file plus atomic rename. Invocation input is read through a bounded, no-follow,
+nonblocking descriptor with fatal UTF-8 decoding. Descriptor/path identity and
+the original bytes are checked again immediately before replacement; detected
+drift denies publication. Invalid UTF-8 is rejected without normalizing unknown
+field bytes. Lock contention waits at most two seconds, then fails;
+the implementation never steals a lock based on age and removes only its own
+lock. A failed replacement preserves the prior artifact. The CLI emits no body
+or successful receipt claim until persistence succeeds. Invocation input/output
+artifacts have a separate 4 MiB limit: oversized input is rejected, and an update
+that would exceed it fails before replacement. This compatibility limit also
+applies to legacy usage callbacks. Usage is otherwise writable at the receipt
+cap. No canonical records, indexes, promotions or additional invocations are
+written by reading. Strict no-write audits must not call this mutating surface.
+
 ## Lane Model
 
 Initial lanes are simple and explicit:
