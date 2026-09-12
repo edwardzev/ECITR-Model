@@ -87,6 +87,9 @@ function evaluateRetrievalEligibility({
 }
 
 function hasScopeConflict({ scope, request }) {
+  if (scope === "blocked") {
+    return true;
+  }
   return (
     scope
     && scope !== "global"

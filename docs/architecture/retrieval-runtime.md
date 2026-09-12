@@ -17,6 +17,13 @@ Support records may enrich lane inputs, but they do not become independent retri
 
 When a retrieval request carries `workspace_id`, every returned canonical record must match that workspace before ranking can influence the result set. Missing workspace identity is treated as non-matching for that request.
 
+Stored `blocked` scope on cases and evidence is ineligible for every request
+scope, including `global`. The shared eligibility gate rejects these records
+before result budgets are applied and before intervention graph neighbors are
+admitted. Nonblocked scope rules and workspace/lifecycle/approval precedence
+remain unchanged. Exclusion diagnostics may identify rejected records; this
+result-admission rule does not change support-graph explanation visibility.
+
 ## Runtime Stages
 
 1. accept a planner output
@@ -86,8 +93,9 @@ Before disclosure, the reader rechecks owner schema/lifecycle validators,
 workspace eligibility, active case approval, tactic freshness and the complete
 evidence-correction graph. Invalid graphs fail closed. Selected corrected
 evidence is `stale`; the newer leaf is not substituted. Stored blocked project
-scope is denied even for a global request. This is a reader disclosure gate,
-not a repair of the broader retrieval scope helper.
+scope is denied even for a global request. The reader retains its separate
+`blocked_scope` disclosure guard for earlier consultations, in addition to the
+shared retrieval helper's `scope_conflict` exclusion.
 
 Successful results carry complete `record` bodies for cases, invariants and
 tactics, preserving constraints, negative applicability, prerequisites,
