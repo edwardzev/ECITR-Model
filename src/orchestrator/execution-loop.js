@@ -28,58 +28,46 @@ class OrchestratorExecutionLoop {
     this.reviewWorkflow = reviewWorkflow;
   }
 
-  async run({ taskPacket, retrievalRequest, intervention, now = new Date() }) {
+  async run({ taskPacket, retrievalRequest, intervention, telemetryContext = {}, signal, now = new Date() }) {
+    const trigger = retrievalRequest ? "explicit_request" : intervention?.mode
+      ?? (this.projectMemorySurface.projectConfig?.preflight_retrieval_mandatory ? "preflight" : "discretionary");
+    const opportunity = this.projectMemorySurface.beginTaskOpportunity({ taskPacket, telemetryContext, captureBoundary: "before_decision",
+      query: retrievalRequest?.query ?? intervention?.query, intent: retrievalRequest?.intent ?? "analysis", trigger: trigger === "explicit_request" ? "discretionary" : trigger, now });
     const routingPlan = this.router.route(taskPacket);
-    const catalogs = this.catalog.loadRuntimeCatalogs();
     const memorySurface = this.projectMemorySurface.describe();
+    let catalogs;
     let retrieval = null;
     let interventionResult = null;
     let memoryInvocation = null;
     let retrievalGate = null;
 
-    if (retrievalRequest) {
-      retrieval = await this.retrievalRuntime.execute({ request: retrievalRequest, catalogs, now });
-      retrievalGate = this.projectMemorySurface.evaluateRetrievalGate({
-        query: retrievalRequest.query,
-        intent: retrievalRequest.intent,
-        trigger: "discretionary",
-      });
-      memoryInvocation = this.projectMemorySurface.logConsultation({
-        taskPacket,
-        consultTrigger: "explicit_request",
-        request: retrievalRequest,
-        retrieval,
-        catalogs,
-        gateEvaluation: retrievalGate,
-        now,
-      });
-    } else if (intervention) {
-      const interventionExecution = await this.interventionRunner.run({
-        intervention,
-        catalogs,
-        now,
-      });
-      retrieval = interventionExecution.retrieval;
-      interventionResult = interventionExecution.intervention;
-      retrievalGate = this.projectMemorySurface.evaluateRetrievalGate({
-        query: intervention.query,
-        intent: retrieval.plan.intent,
-        trigger: intervention.mode,
-      });
-      memoryInvocation = this.projectMemorySurface.logConsultation({
-        taskPacket,
-        consultTrigger: intervention.mode,
-        request: null,
-        retrieval,
-        catalogs,
-        gateEvaluation: retrievalGate,
-        now,
-      });
+    if (retrievalRequest || intervention) {
+      const result = await this.projectMemorySurface.executeConsultation({ opportunity, taskPacket, telemetryContext,
+        query: retrievalRequest?.query ?? intervention?.query, trigger, request: retrievalRequest ?? null, signal, now,
+        execute: async ({ measure, captureCatalogs }) => {
+          catalogs = await measure("catalog_load", () => this.catalog.loadRuntimeCatalogs());
+          captureCatalogs(catalogs);
+          if (retrievalRequest) {
+            retrieval = await measure("retrieval", () => this.retrievalRuntime.execute({ request: retrievalRequest, catalogs, now }));
+          } else {
+            const execution = await measure("retrieval", () => this.interventionRunner.run({ intervention, catalogs, now }));
+            retrieval = execution.retrieval;
+            interventionResult = execution.intervention;
+          }
+          return { request: retrievalRequest ?? null, retrieval };
+        } });
+      memoryInvocation = result.memory_invocation;
+      retrievalGate = memoryInvocation?.retrieval_gate ?? null;
     } else {
-      memoryInvocation = this.projectMemorySurface.logTaskOpportunity({
-        taskPacket,
-        now,
-      });
+      memoryInvocation = this.projectMemorySurface.decideTaskOpportunity({ opportunity, decision: "skip", trigger,
+        reason: telemetryContext.decision_reason ?? "no_consult_reported", now: this.projectMemorySurface.wallNow() });
+      if (memoryInvocation?.decision === "blocked") {
+        const error = new Error("mandatory_retrieval_required");
+        error.memory_invocation = memoryInvocation;
+        throw error;
+      }
+      retrievalGate = memoryInvocation?.retrieval_gate ?? null;
+      catalogs = this.catalog.loadRuntimeCatalogs();
     }
 
     return {

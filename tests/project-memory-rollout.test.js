@@ -298,9 +298,12 @@ test("aggregate adoption report covers consulted and skipped opportunities acros
 
   assert.equal(report.workspace_count, 2);
   assert.deepEqual(report.zero_opportunity_workspaces, ["beta"]);
-  assert.equal(report.totals.task_opportunities, 2);
+  assert.equal(report.totals.task_opportunities, 0);
+  assert.equal(report.totals.coverage.legacy_artifacts, 2);
+  assert.equal(report.totals.legacy_compatibility.task_opportunities, 2);
   assert.equal(report.totals.consultations, 1);
-  assert.equal(report.totals.consultation_rate, 0.5);
+  assert.equal(report.totals.consultation_rate, null);
+  assert.equal(report.totals.legacy_compatibility.consultation_rate, 0.5);
   assert.equal(report.totals.usage_callback_rate, 1);
   assert.equal(report.totals.attribution_mismatch_count, 1);
   assert.deepEqual(report.totals.used_record_ids, ["case_alpha"]);

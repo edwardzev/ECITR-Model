@@ -53,6 +53,15 @@ The intervention layer does not:
 - expose support records as new public result groups
 - change ranking authority or bypass freshness, scope, or approval gates
 
+## Project-Memory Telemetry
+
+The existing execution-loop records shadow observations before its own branch
+choice; search/skip wrappers record caller-selected observations before internal
+dispatch. Both retain opportunity identity and separate retrieval attempts;
+external-agent choice coverage is unavailable.
+See [project-memory-telemetry](./project-memory-telemetry.md) for the versioned
+derived contract, failure/usage evidence boundaries and coverage limits.
+
 ## Selected-Record Reader
 
 `ProjectMemorySurface.readProjectMemoryRecords` (alias

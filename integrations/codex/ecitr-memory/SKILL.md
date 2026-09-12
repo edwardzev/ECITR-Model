@@ -27,6 +27,12 @@ Run from the project workspace so marker discovery and workspace attribution rem
   --trigger discretionary
 ```
 
+When an existing memory session or episode reference is available, pass its literal
+`--session-ref` or `--episode-id` with `--thread-ref` and `--lane` as applicable.
+Use that same lifecycle identity on retries and no-consult records. The wrappers
+assign the opportunity and attempt automatically; do not add a separate logging
+call before a search. Missing lifecycle identity is reported as unjoined coverage.
+
 Use `--trigger preflight` or `--trigger failure_retry` only when that is the actual reason for consultation. Keep queries concrete and scoped; do not treat broad lexical matches as proof.
 
 ## Read Selected Records
@@ -63,5 +69,20 @@ If an eligible substantive task ends without a search, log exactly one opportuni
   --task-id "stable-task-id" \
   --task-title "short task title"
 ```
+
+The no-consult wrapper also accepts `--query`, `--trigger` and
+`--decision-reason` for the actual task decision. Both branches capture a shadow
+gate observation after the caller has selected the wrapper. This is recorded as
+`caller_selected_before_dispatch`, not before-agent-choice coverage. Native
+external-agent choice coverage remains unavailable; no new logging call or
+retrieval-skip policy is introduced. If a search fails
+after capture starts, its error envelope supplies `memory_invocation` so the
+existing callback can still record no returned influence. A missing marker or
+other pre-capture failure exposes a capture gap and creates no fallback artifact.
+
+The usage wrapper optionally accepts `--inspected-record-ids` and
+`--use-evidence-file`, containing decision/output and independent-support
+reference declarations. These remain self-reports until independently verified.
+An empty callback and no recorded callback remain separate states.
 
 Use retrieved records as guidance only after checking their scope, lifecycle state, provenance, and applicability to the current source state.

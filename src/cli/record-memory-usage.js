@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const path = require("node:path");
+const fs = require("node:fs");
 
 const { DEFAULT_CATALOG_ROOT } = require("../cases/case-refresh");
 const { ProjectMemorySurface } = require("../runtime/project-memory");
@@ -17,6 +18,8 @@ function main() {
     invocationId: options.invocationId,
     usedRecordIds: options.usedRecordIds,
     selectedRecordIds: options.selectedRecordIds,
+    inspectedRecordIds: options.inspectedRecordIds,
+    useEvidence: options.useEvidenceFile ? JSON.parse(fs.readFileSync(options.useEvidenceFile, "utf8")) : [],
   });
 
   process.stdout.write(`${JSON.stringify({
@@ -34,6 +37,8 @@ function parseArgs(args) {
     invocationId: null,
     usedRecordIds: [],
     selectedRecordIds: [],
+    inspectedRecordIds: [],
+    useEvidenceFile: null,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -53,6 +58,12 @@ function parseArgs(args) {
         break;
       case "--used-record-ids":
         options.usedRecordIds = splitList(args[++index]);
+        break;
+      case "--inspected-record-ids":
+        options.inspectedRecordIds = splitList(args[++index]);
+        break;
+      case "--use-evidence-file":
+        options.useEvidenceFile = path.resolve(args[++index]);
         break;
       case "--selected-record-ids":
         options.selectedRecordIds = splitList(args[++index]);

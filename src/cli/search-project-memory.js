@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 const path = require("node:path");
+const { readTelemetryOption, captureGap } = require("./project-memory-telemetry-options");
+const { isTelemetryExcluded } = require("../runtime/project-memory-telemetry");
 
 const { DEFAULT_CATALOG_ROOT } = require("../cases/case-refresh");
 const {
@@ -12,8 +14,12 @@ const { resolveProjectMemoryConfig } = require("../workspace/project-memory-conf
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
+  if (isTelemetryExcluded(options.telemetryContext ?? {})) throw new Error("Excluded telemetry context.");
   const { projectConfig, artifactRoot, workspaceRoot } = resolveProjectMemoryConfig(options);
-  const catalog = new FileBackedCatalog({ rootDir: options.catalogRoot });
+  if (!projectConfig.marker_path) throw new Error("A governed workspace marker is required before telemetry capture.");
+  if (options.catalogRootExplicit && options.catalogRoot !== projectConfig.catalog_root) throw new Error("Explicit catalog root does not match workspace marker.");
+  if (options.workspaceId && options.workspaceId !== projectConfig.workspace_id) throw new Error("Explicit workspace identity does not match marker.");
+  const catalog = new FileBackedCatalog({ rootDir: projectConfig.catalog_root });
   const surface = new ProjectMemorySurface({
     catalog,
     retrievalRuntime: createProjectMemoryRetrievalRuntime({
@@ -35,8 +41,9 @@ async function main() {
     : undefined;
   const result = await surface.searchProjectMemory({
     query: options.query,
+    telemetryContext: options.telemetryContext ?? {},
     taskPacket: {
-      task_id: options.taskId ?? `cli_project_memory_${Date.now()}`,
+      task_id: options.taskId ?? null,
       title: options.taskTitle ?? options.query,
     },
     projectScope: options.projectScope ?? projectConfig.default_project_scope,
@@ -80,9 +87,11 @@ function parseArgs(args) {
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+    if (readTelemetryOption(options, arg, args[index + 1])) { index += 1; continue; }
     switch (arg) {
       case "--catalog-root":
         options.catalogRoot = path.resolve(args[++index]);
+        options.catalogRootExplicit = true;
         break;
       case "--workspace-root":
         options.workspaceRoot = path.resolve(args[++index]);
@@ -131,9 +140,6 @@ function parseArgs(args) {
     }
   }
 
-  if (!options.query || !options.query.trim()) {
-    throw new Error("search-project-memory requires --query");
-  }
   if (!options.workspaceRoot && !options.workspaceId) {
     options.workspaceRoot = process.cwd();
   }
@@ -153,7 +159,7 @@ function buildMaxResultsPerLayer({ allowedLayers, maxResults }) {
 
 if (require.main === module) {
   main().catch((error) => {
-    process.stderr.write(`${JSON.stringify({ ok: false, error: error.message }, null, 2)}\n`);
+    process.stderr.write(`${JSON.stringify(captureGap(error), null, 2)}\n`);
     process.exitCode = 1;
   });
 }

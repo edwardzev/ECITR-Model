@@ -2,6 +2,12 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { TextDecoder } = require("node:util");
+const { performance } = require("node:perf_hooks");
+const { summarizeTelemetryArtifacts } = require("./project-memory-telemetry-report");
+const {
+  validateTelemetry, buildOpportunity, startAttempt, observeBackend, getBackendObservation,
+  buildUseEvidence, isTelemetryExcluded, unavailable,
+} = require("./project-memory-telemetry");
 
 const { buildSemanticEmbedder } = require("../retrieval/embedders/factory");
 const { buildDefaultLanes } = require("../retrieval/lanes");
@@ -22,6 +28,7 @@ const {
   buildRetrievalBasis,
   prepareSelectedRecords,
   readerError,
+  structuralHash,
   validateSelection,
 } = require("./project-memory-reader");
 const {
@@ -48,7 +55,11 @@ class ProjectMemorySurface {
     retrievalGate = new RetrievalGate(),
     projectConfig = loadEcitrProjectConfig({ startDir: catalog?.rootDir }),
     artifactRoot,
+    monotonicNow = () => performance.now(),
+    wallNow = () => new Date(),
   } = {}) {
+    this.monotonicNow = monotonicNow;
+    this.wallNow = wallNow;
     this.catalog = catalog;
     this.retrievalRuntime = retrievalRuntime;
     this.retrievalGate = retrievalGate;
@@ -120,125 +131,197 @@ class ProjectMemorySurface {
     });
   }
 
-  logTaskOpportunity({ taskPacket, now = new Date() } = {}) {
-    if (!this.projectConfig) {
-      return null;
+  beginTaskOpportunity({ taskPacket, telemetryContext = {}, query, intent = "analysis", trigger = "discretionary", captureBoundary = "caller_selected_before_dispatch", now = new Date() } = {}) {
+    if (!this.projectConfig || isTelemetryExcluded(telemetryContext)) return null;
+    const telemetry = buildOpportunity({ projectConfig: this.projectConfig, taskPacket, context: telemetryContext, now, captureBoundary });
+    const invocationId = `meminv_opportunity_${telemetry.opportunity.opportunity_id.slice(7)}`;
+    const existingPath = findInvocationArtifactPath({ artifactRoot: this.artifactRoot, invocationId });
+    let invocation;
+    if (existingPath) {
+      invocation = updateMemoryInvocation({ artifactRoot: this.artifactRoot, invocationId,
+        update: (artifact, artifactPath) => ({ result: invocationSummary(artifact, artifactPath) }) });
+    } else {
+      try {
+        invocation = writeMemoryInvocation({ artifactRoot: this.artifactRoot, projectConfig: this.projectConfig,
+          consultedAt: now, taskPacket, memoryConsulted: false, consultTrigger: null, request: null, retrieval: null,
+          telemetry, invocationId });
+      } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+        // Atomic creation may lose to another process at the same lifecycle boundary.
+        invocation = updateMemoryInvocation({ artifactRoot: this.artifactRoot, invocationId,
+          update: (artifact, artifactPath) => ({ result: invocationSummary(artifact, artifactPath) }) });
+      }
     }
-
-    return writeMemoryInvocation({
-      artifactRoot: this.artifactRoot,
-      projectConfig: this.projectConfig,
-      consultedAt: now,
-      taskPacket,
-      memoryConsulted: false,
-      consultTrigger: null,
-      request: null,
-      retrieval: null,
-    });
+    return updateMemoryInvocation({ artifactRoot: this.artifactRoot, invocationId, update: (artifact, artifactPath) => {
+      if (Object.hasOwn(artifact.telemetry.opportunity, "gate_observation")) {
+        return { result: invocationSummary(artifact, artifactPath) };
+      }
+      const actualQuery = query ?? taskPacket?.objective ?? taskPacket?.title ?? null;
+      const started = this.monotonicNow();
+      let evaluation = null;
+      let gap = null;
+      if (typeof actualQuery !== "string" || !actualQuery.trim()) gap = "query_not_available";
+      else {
+        try {
+          const { actual_behavior, ...observation } = this.evaluateRetrievalGate({ query: actualQuery, intent, trigger });
+          evaluation = observation;
+        } catch { gap = "gate_evaluation_failed"; }
+      }
+      artifact.telemetry.opportunity.gate_observation = {
+        evaluation, reason: gap,
+        observed_at: this.wallNow().toISOString(),
+        duration_ms: this.monotonicNow() - started,
+        input_source: query != null ? "query" : taskPacket?.objective != null ? "task_objective" : taskPacket?.title != null ? "task_title" : null,
+        query_sha256: actualQuery == null ? null : structuralHash(actualQuery),
+      };
+      return { nextArtifact: artifact, result: invocationSummary(artifact, artifactPath) };
+    } });
   }
 
-  logConsultation({
-    taskPacket,
-    consultTrigger,
-    request = null,
-    retrieval = null,
-    catalogs,
-    gateEvaluation = null,
-    now = new Date(),
-  } = {}) {
-    if (!this.projectConfig) {
-      return null;
-    }
-
-    const resolvedGateEvaluation = gateEvaluation ?? (
-      request?.query
-        ? this.evaluateRetrievalGate({
-          query: request.query,
-          intent: request.intent,
-          trigger: consultTrigger,
-        })
-        : null
-    );
-
-    return writeMemoryInvocation({
-      artifactRoot: this.artifactRoot,
-      projectConfig: this.projectConfig,
-      consultedAt: now,
-      taskPacket,
-      memoryConsulted: true,
-      consultTrigger,
-      request,
-      retrieval,
-      catalogs,
-      gateEvaluation: resolvedGateEvaluation,
-    });
+  decideTaskOpportunity({ opportunity, decision, reason = null, trigger = "discretionary", now = new Date() }) {
+    if (!opportunity) return null;
+    return updateMemoryInvocation({ artifactRoot: this.artifactRoot, invocationId: opportunity.invocation_id,
+      update: (artifact, artifactPath) => {
+        const current = artifact.telemetry.opportunity;
+        const satisfyingMandatory = current.decision === "blocked" && current.decision_reason === "mandatory_retrieval_required" && decision === "consult";
+        if (current.decision !== "pending" && current.decision !== decision && !satisfyingMandatory) throw readerError("opportunity_decision_conflict");
+        if (current.decision === decision) return { result: invocationSummary(artifact, artifactPath) };
+        const skipForbidden = decision === "skip" && (this.projectConfig.preflight_retrieval_mandatory
+          || (trigger === "failure_retry" && this.projectConfig.failure_retry_retrieval_mandatory));
+        const resolvedDecision = skipForbidden ? "blocked" : decision;
+        artifact.telemetry.opportunity = { ...current, decision: resolvedDecision,
+          decision_reason: skipForbidden ? "mandatory_retrieval_required" : reason,
+          decision_at: now.toISOString() };
+        const gate = current.gate_observation?.evaluation;
+        artifact.retrieval_gate = gate ? { ...gate,
+          actual_behavior: resolvedDecision === "skip" ? "not_consulted" : resolvedDecision === "blocked" ? "blocked" : "retrieve_always" } : null;
+        return { nextArtifact: artifact, result: invocationSummary(artifact, artifactPath) };
+      } });
   }
 
-  async searchProjectMemory({
-    query,
-    taskPacket,
-    projectScope = this.projectConfig?.default_project_scope,
-    intent = "analysis",
-    allowedLayers,
-    maxResultsPerLayer,
-    trigger = "discretionary",
-    now = new Date(),
-  } = {}) {
-    if (!this.projectConfig) {
-      throw new Error("Project memory is not configured for this workspace.");
+  logTaskOpportunity({ taskPacket, telemetryContext = {}, query, trigger = "discretionary", now = new Date() } = {}) {
+    const opportunity = this.beginTaskOpportunity({ taskPacket, telemetryContext, query, trigger, now });
+    const result = this.decideTaskOpportunity({ opportunity, decision: "skip", reason: telemetryContext.decision_reason ?? "no_consult_reported", trigger, now: this.wallNow() });
+    if (result?.decision === "blocked") {
+      const error = readerError("mandatory_retrieval_required");
+      error.memory_invocation = result;
+      throw error;
     }
-    if (!query || !String(query).trim()) {
-      throw new Error("search_project_memory requires a non-empty query.");
+    return result;
+  }
+
+  // Compatibility for external producers that already finished retrieval. Do not
+  // fabricate pre-decision coverage or elapsed time for these post-hoc records.
+  logConsultation({ taskPacket, consultTrigger, request = null, retrieval = null, catalogs,
+    gateEvaluation = null, telemetryContext = {}, now = new Date() } = {}) {
+    if (!this.projectConfig || isTelemetryExcluded(telemetryContext)) return null;
+    const telemetry = buildOpportunity({ projectConfig: this.projectConfig, taskPacket, context: telemetryContext, now, captureBoundary: "post_execution" });
+    telemetry.opportunity.decision = "consult";
+    telemetry.opportunity.decision_at = now.toISOString();
+    telemetry.opportunity.decision_reason = "post_execution_consultation";
+    return writeMemoryInvocation({ artifactRoot: this.artifactRoot, projectConfig: this.projectConfig,
+      consultedAt: now, taskPacket, memoryConsulted: true, consultTrigger, request, retrieval, catalogs,
+      gateEvaluation, telemetry });
+  }
+
+  async executeConsultation({ opportunity = null, taskPacket, telemetryContext = {}, query, intent = "analysis",
+    trigger = "discretionary", request = null, execute, signal, now = new Date() } = {}) {
+    if (isTelemetryExcluded(telemetryContext)) throw readerError("memory_telemetry_excluded");
+    if (!this.projectConfig) return { ...await execute({ measure: async (_phase, action) => action(), captureCatalogs() {} }), memory_invocation: null };
+    const anchor = opportunity ?? this.beginTaskOpportunity({ taskPacket, telemetryContext, query: query ?? request?.query, intent, trigger, now });
+    this.decideTaskOpportunity({ opportunity: anchor, decision: "consult", trigger,
+      reason: telemetryContext.decision_reason ?? "explicit_consultation", now: this.wallNow() });
+    let invocation = updateMemoryInvocation({ artifactRoot: this.artifactRoot, invocationId: anchor.invocation_id,
+      update: (artifact, artifactPath) => {
+        if (artifact.telemetry.attempt) return { result: { prior: artifact } };
+        artifact.memory_consulted = true;
+        artifact.consult_trigger = trigger;
+        artifact.request = request ? structuredClone(request) : null;
+        artifact.telemetry.attempt = startAttempt({ invocationId: artifact.invocation_id, requestId: request?.request_id, trigger, context: telemetryContext, now });
+        return { nextArtifact: artifact, result: invocationSummary(artifact, artifactPath) };
+      } });
+    if (invocation.prior) {
+      const telemetry = { ...structuredClone(invocation.prior.telemetry), attempt: null };
+      const invocationId = `meminv_${crypto.randomUUID()}`;
+      telemetry.attempt = startAttempt({ invocationId, requestId: request?.request_id, trigger, context: telemetryContext, now });
+      invocation = writeMemoryInvocation({ artifactRoot: this.artifactRoot, projectConfig: this.projectConfig,
+        consultedAt: now, taskPacket, memoryConsulted: true, consultTrigger: trigger, request, retrieval: null, telemetry, invocationId });
     }
-    if (!MEMORY_CONSULT_TRIGGERS.includes(trigger)) {
-      throw new Error(
-        `search_project_memory trigger must be one of: ${MEMORY_CONSULT_TRIGGERS.join(", ")}.`,
-      );
+    const phases = {};
+    let catalogs = null;
+    let corpusSha256 = null;
+    let result = null;
+    let failure = null;
+    const started = this.monotonicNow();
+    try {
+      if (signal?.aborted) throw Object.assign(readerError("retrieval_cancelled"), { name: "AbortError" });
+      result = await execute({
+        measure: async (phase, action) => {
+          const before = this.monotonicNow();
+          try {
+            const value = await action();
+            if (phase === "corpus_fingerprint") corpusSha256 = value;
+            return value;
+          }
+          finally { phases[phase] = { value: this.monotonicNow() - before, reason: null }; }
+        },
+        captureCatalogs: (snapshot) => { catalogs = snapshot; },
+      });
+    } catch (error) { failure = error; }
+    const duration = this.monotonicNow() - started;
+    const cancelled = failure?.name === "AbortError" || failure?.code === "ABORT_ERR";
+    invocation = updateMemoryInvocation({ artifactRoot: this.artifactRoot, invocationId: invocation.invocation_id,
+      update: (artifact, artifactPath) => {
+        const attempt = artifact.telemetry.attempt;
+        if (attempt.status !== "running") throw readerError("attempt_terminal_already_recorded");
+        artifact.telemetry.attempt = { ...attempt,
+          status: failure ? cancelled ? "cancelled" : "failed" : "succeeded",
+          finished_at: this.wallNow().toISOString(), duration_ms: duration, duration_reason: null,
+          phases_ms: { ...attempt.phases_ms, ...phases },
+          error_code: failure ? cancelled ? "retrieval_cancelled" : "retrieval_failed" : null,
+          corpus_sha256: result?.corpus_sha256 ?? corpusSha256 ?? unavailable(catalogs ? "catalog_fingerprint_not_recorded" : "catalog_not_loaded"),
+          ...getBackendObservation(catalogs),
+        };
+        if (result) {
+          artifact.request = result.request ?? artifact.request;
+          artifact.telemetry.attempt.request_id = artifact.request?.request_id ?? null;
+          artifact.telemetry.attempt.request_id_reason = artifact.request?.request_id ? null : "request_not_exposed";
+          artifact.returned_counts = buildReturnedCounts(result.retrieval);
+          artifact.returned_record_ids = buildReturnedRecordIds(result.retrieval);
+          const basis = buildRetrievalBasis(artifact.returned_record_ids, catalogs);
+          if (basis) artifact.retrieval_basis = basis;
+          artifact.retrieval_gate = result.gateEvaluation ?? artifact.retrieval_gate;
+        }
+        return { nextArtifact: artifact, result: invocationSummary(artifact, artifactPath) };
+      } });
+    if (failure) {
+      const error = readerError(cancelled ? "retrieval_cancelled" : "retrieval_failed");
+      error.memory_invocation = invocation;
+      throw error;
     }
+    return { ...result, memory_invocation: invocation };
+  }
 
-    const request = {
-      request_id: buildRequestId({
-        query,
-        trigger,
-        now,
-      }),
-      query: String(query).trim(),
-      workspace_id: this.projectConfig.workspace_id,
-      project_scope: projectScope,
-      intent,
-    };
-
-    if (allowedLayers) {
-      request.allowed_layers = [...allowedLayers];
-    }
-
-    if (maxResultsPerLayer) {
-      request.max_results_per_layer = structuredClone(maxResultsPerLayer);
-    }
-
-    const gateEvaluation = this.evaluateRetrievalGate({
-      query: request.query,
-      intent: request.intent,
-      trigger,
-    });
-    const catalogs = this.catalog.loadRuntimeCatalogs();
-    const retrieval = await this.retrievalRuntime.execute({ request, catalogs, now });
-    const invocation = this.logConsultation({
-      taskPacket,
-      consultTrigger: trigger,
-      request,
-      retrieval,
-      catalogs,
-      gateEvaluation,
-      now,
-    });
-
-    return {
-      retrieval,
-      retrieval_gate: gateEvaluation,
-      memory_surface: this.describe(),
-      memory_invocation: invocation,
-    };
+  async searchProjectMemory({ query, taskPacket, projectScope = this.projectConfig?.default_project_scope,
+    intent = "analysis", allowedLayers, maxResultsPerLayer, trigger = "discretionary",
+    telemetryContext = {}, signal, now = new Date() } = {}) {
+    if (!this.projectConfig) throw new Error("Project memory is not configured for this workspace.");
+    const result = await this.executeConsultation({ taskPacket, query, intent, trigger, telemetryContext, signal, now,
+      execute: async ({ measure, captureCatalogs }) => {
+        if (!query || !String(query).trim()) throw new Error("search_project_memory requires a non-empty query.");
+        if (!MEMORY_CONSULT_TRIGGERS.includes(trigger)) throw new Error("Invalid search_project_memory trigger.");
+        const request = { request_id: buildRequestId({ query, trigger, now }), query: String(query).trim(),
+          workspace_id: this.projectConfig.workspace_id, project_scope: projectScope, intent };
+        if (allowedLayers) request.allowed_layers = [...allowedLayers];
+        if (maxResultsPerLayer) request.max_results_per_layer = structuredClone(maxResultsPerLayer);
+        const catalogs = await measure("catalog_load", () => this.catalog.loadRuntimeCatalogs());
+        captureCatalogs(catalogs);
+        const corpusSha256 = await measure("corpus_fingerprint", () => ({ value: structuralHash(catalogs), reason: null }));
+        const retrieval = await measure("retrieval", () => this.retrievalRuntime.execute({ request, catalogs, now }));
+        return { request, retrieval, corpus_sha256: corpusSha256 };
+      } });
+    return { retrieval: result.retrieval, retrieval_gate: result.memory_invocation.retrieval_gate,
+      memory_surface: this.describe(), memory_invocation: result.memory_invocation };
   }
 
   async search_project_memory(args) {
@@ -287,6 +370,8 @@ class ProjectMemorySurface {
     invocationId,
     usedRecordIds = [],
     selectedRecordIds = [],
+    inspectedRecordIds = [],
+    useEvidence = [],
     now = new Date(),
   } = {}) {
     if (!invocationId) {
@@ -302,11 +387,17 @@ class ProjectMemorySurface {
       update: (artifact, artifactPath) => {
         if (artifact.workspace_id !== this.projectConfig.workspace_id) throw readerError("invocation_workspace_mismatch");
         const returnedRecordIds = new Set(flattenReturnedRecordIds(artifact.returned_record_ids));
+        for (const ids of [usedRecordIds, selectedRecordIds]) {
+          if (!Array.isArray(ids) || ids.length > 100 || ids.some((id) => typeof id !== "string" || !id.length || Buffer.byteLength(id) > 160)) throw readerError("invalid_usage_record_ids");
+        }
         const normalizedUsedRecordIds = normalizeUniqueStrings(usedRecordIds);
         const normalizedSelectedRecordIds = normalizeUniqueStrings(selectedRecordIds);
         const usedReturnedRecordIds = normalizedUsedRecordIds.filter((recordId) => returnedRecordIds.has(recordId));
+        const useEvidenceReport = buildUseEvidence({ inspectedRecordIds, useEvidence });
+        if (useEvidenceReport.links.some((entry) => !usedReturnedRecordIds.includes(entry.record_id))) throw readerError("use_evidence_record_not_used");
         const nextArtifact = {
           ...artifact,
+          use_evidence: useEvidenceReport,
           usage_recorded_at: now.toISOString(),
           used_record_ids: normalizedUsedRecordIds,
           selected_record_ids: normalizedSelectedRecordIds,
@@ -378,14 +469,15 @@ function createProjectMemoryRetrievalRuntime({
     responseEnricher,
     graphRoot,
     lanesFactory({ catalogs, canonicalCatalogs = catalogs, plan }) {
-      const semanticBackend = tableExists({
+      const indexed = tableExists({
         uri: effectiveLanceDbUri,
         tableName: effectiveLanceDbTableName,
         catalogRoot: canonicalCatalogs?.__catalogRoot,
         catalogs: canonicalCatalogs,
         expectedEmbeddingSignature: () => getEmbedder().embeddingSignature ?? null,
         constrainDefaultUriToDefaultCatalog,
-      })
+      });
+      const semanticBackend = indexed
         ? buildLanceDbBackend({
           uri: effectiveLanceDbUri,
           tableName: effectiveLanceDbTableName,
@@ -394,6 +486,8 @@ function createProjectMemoryRetrievalRuntime({
           maximumDistance: lancedbMaximumDistance,
         })
         : buildFallbackBackend({ catalogs });
+      observeBackend(canonicalCatalogs, { backend: semanticBackend, indexed,
+        indexBasisPath: path.join(String(effectiveLanceDbUri), `${effectiveLanceDbTableName}.basis.json`) });
       return buildDefaultLanes({ catalogs, plan, semanticBackend });
     },
   });
@@ -462,8 +556,10 @@ function writeMemoryInvocation({
   retrieval,
   catalogs,
   gateEvaluation = null,
+  telemetry,
+  invocationId: explicitInvocationId,
 }) {
-  const invocationId = buildInvocationId({
+  const invocationId = explicitInvocationId ?? buildInvocationId({
     taskId: taskPacket?.task_id ?? null,
     consultTrigger,
     consultedAt,
@@ -494,7 +590,9 @@ function writeMemoryInvocation({
     selected_record_ids: [],
     used_returned_record_ids: [],
     used_memory: false,
+    ...(telemetry ? { telemetry } : {}),
   };
+  if (artifact.telemetry) validateTelemetry(artifact.telemetry);
   const retrievalBasis = buildRetrievalBasis(artifact.returned_record_ids, catalogs);
   if (retrievalBasis) artifact.retrieval_basis = retrievalBasis;
 
@@ -504,49 +602,45 @@ function writeMemoryInvocation({
     consultedAt,
   });
   fs.mkdirSync(path.dirname(artifactPath), { recursive: true });
-  writeJson(artifactPath, artifact);
+  const temporaryPath = `${artifactPath}.${crypto.randomUUID()}.tmp`;
+  let descriptor;
+  try {
+    const bytes = Buffer.from(`${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+    if (bytes.length > MAX_INVOCATION_BYTES) throw readerError("invocation_budget_exceeded");
+    descriptor = fs.openSync(temporaryPath, "wx", 0o600);
+    fs.writeFileSync(descriptor, bytes);
+    fs.fsyncSync(descriptor);
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    fs.linkSync(temporaryPath, artifactPath); // Publish the complete file without replacing another writer.
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+    if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath);
+  }
+  return invocationSummary(artifact, artifactPath);
+}
 
+function invocationSummary(artifact, artifactPath) {
   return {
-    invocation_id: invocationId,
+    invocation_id: artifact.invocation_id,
     artifact_path: artifactPath,
     memory_consulted: artifact.memory_consulted,
     consult_trigger: artifact.consult_trigger,
     returned_counts: artifact.returned_counts,
     returned_record_ids: artifact.returned_record_ids,
     retrieval_gate: artifact.retrieval_gate,
+    ...(artifact.telemetry ? { opportunity_id: artifact.telemetry.opportunity.opportunity_id,
+      decision: artifact.telemetry.opportunity.decision, attempt: artifact.telemetry.attempt } : {}),
   };
 }
 
-function summarizeMemoryInvocations({
-  artifactRoot,
-  since = null,
-  until = null,
-} = {}) {
+function summarizeMemoryInvocations({ artifactRoot, since = null, until = null, eligiblePopulation = null } = {}) {
   const artifacts = loadMemoryInvocationArtifacts({ artifactRoot, since, until });
-  const consulted = artifacts.filter((artifact) => artifact.memory_consulted);
-  const usageRecorded = consulted.filter((artifact) => artifact.usage_recorded_at);
-  const used = consulted.filter((artifact) => artifact.used_memory);
-
   return {
     artifact_root: path.resolve(artifactRoot),
     since: since ? new Date(since).toISOString() : null,
     until: until ? new Date(until).toISOString() : null,
-    task_opportunities: artifacts.length,
-    consultations: consulted.length,
-    consultation_rate: ratio(consulted.length, artifacts.length),
-    consultations_by_trigger: Object.fromEntries(
-      MEMORY_CONSULT_TRIGGERS.map((trigger) => [
-        trigger,
-        consulted.filter((artifact) => artifact.consult_trigger === trigger).length,
-      ]),
-    ),
-    consultations_with_results: consulted.filter((artifact) =>
-      Object.values(artifact.returned_counts ?? {}).some((count) => Number(count) > 0)).length,
-    returned_records_by_layer: sumReturnedCounts(consulted),
-    usage_callbacks: usageRecorded.length,
-    usage_callback_rate: ratio(usageRecorded.length, consulted.length),
-    used_memory: used.length,
-    used_memory_rate: ratio(used.length, consulted.length),
+    ...summarizeTelemetryArtifacts(artifacts, { eligiblePopulation }),
   };
 }
 
@@ -592,25 +686,6 @@ function listJsonFiles(directory) {
   return files.sort();
 }
 
-function sumReturnedCounts(artifacts) {
-  const totals = {
-    tactics: 0,
-    invariants: 0,
-    cases: 0,
-    evidence: 0,
-  };
-  for (const artifact of artifacts) {
-    for (const layer of Object.keys(totals)) {
-      totals[layer] += Number(artifact.returned_counts?.[layer] ?? 0);
-    }
-  }
-  return totals;
-}
-
-function ratio(numerator, denominator) {
-  return denominator > 0 ? numerator / denominator : null;
-}
-
 function buildReturnedCounts(retrieval) {
   const results = retrieval?.response?.results ?? {};
   return {
@@ -638,7 +713,7 @@ function buildRequestId({ query, trigger, now }) {
     .digest("hex")
     .slice(0, 10);
   const timestamp = sanitizeTimestamp(now.toISOString()).slice(0, 14);
-  return `req_project_memory_${timestamp}_${digest}`;
+  return `req_project_memory_${timestamp}_${digest}_${crypto.randomUUID().slice(0, 8)}`;
 }
 
 function buildInvocationId({ taskId, consultTrigger, consultedAt }) {
@@ -652,6 +727,7 @@ function buildInvocationId({ taskId, consultTrigger, consultedAt }) {
 }
 
 function buildArtifactPath({ artifactRoot, invocationId, consultedAt }) {
+  if (invocationId.startsWith("meminv_opportunity_")) return path.join(artifactRoot, "anchors", "v1", `${invocationId}.json`);
   const year = String(consultedAt.getUTCFullYear());
   const month = String(consultedAt.getUTCMonth() + 1).padStart(2, "0");
   return path.join(artifactRoot, year, month, `${invocationId}.json`);
@@ -793,6 +869,7 @@ function assertInvocationSnapshotUnchanged(artifactPath, snapshot) {
 }
 
 function replaceInvocationAtomically(artifactPath, artifact, snapshot) {
+  if (artifact.telemetry) validateTelemetry(artifact.telemetry);
   const tempPath = `${artifactPath}.${crypto.randomUUID()}.tmp`;
   let descriptor;
   try {

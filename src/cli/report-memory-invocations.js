@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const path = require("node:path");
+const fs = require("node:fs");
 
 const { DEFAULT_CATALOG_ROOT } = require("../cases/case-refresh");
 const { summarizeMemoryInvocations } = require("../runtime/project-memory");
@@ -18,6 +19,7 @@ function main() {
     artifactRoot,
     since: options.since,
     until: options.until,
+    eligiblePopulation: options.populationFile ? JSON.parse(fs.readFileSync(options.populationFile, "utf8")) : null,
   });
 
   process.stdout.write(`${JSON.stringify({
@@ -51,6 +53,9 @@ function parseArgs(args) {
         break;
       case "--artifact-root":
         options.artifactRoot = path.resolve(args[++index]);
+        break;
+      case "--population-file":
+        options.populationFile = path.resolve(args[++index]);
         break;
       case "--since":
         options.since = args[++index];

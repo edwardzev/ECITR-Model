@@ -41,8 +41,13 @@ This does not change the control-plane contract:
 
 ## Shadow Retrieval Gate
 
-The project-memory surface evaluates `ecitr-conservative-shadow-v1` when a
-retrieval request is already being executed. The gate emits:
+The instrumented execution-loop entry evaluates `ecitr-conservative-shadow-v1`
+before its own consult/skip branch choice. Direct search/skip wrappers observe
+an action already selected by their caller, before internal dispatch. Both
+persist one opportunity observation in the existing invocation store, with
+these populations explicitly distinguished. Native external-agent choice
+coverage is unavailable.
+The gate emits:
 
 - a proposed `retrieve` or `skip` classification
 - the policy-effective decision
@@ -54,16 +59,21 @@ This gate is observation-only:
 
 - `mode` is `shadow`
 - `enforcement` is `disabled`
-- `actual_behavior` is `retrieve_always`
 - a proposed skip cannot suppress an explicit project-memory search or runtime
   intervention
-- the gate does not create a retrieval request for a task that did not already
-  request retrieval
+- the opportunity records the actual consult, skip, pending or blocked outcome
+  separately from the gate proposal
+- completed search compatibility output retains `actual_behavior: retrieve_always`;
+  an actual no-consult outcome is `not_consulted`
+- capturing a gate observation does not create a retrieval request
 
 Mandatory `preflight` and `failure_retry` policy in `ecitr.project.json` always
-produces an effective `retrieve` decision for the matching trigger. Gate output
-is stored only in the existing derived memory-invocation artifact; it does not
-become a canonical record.
+produces an effective `retrieve` decision for the matching trigger. The supported
+no-consult producer rejects a mandatory skip. Gate output remains derived
+invocation metadata; it does not become a canonical record. Post-execution
+compatibility logging, direct caller-selected wrappers and missing task input
+explicitly do not prove before-agent-choice coverage. See [project-memory-telemetry](./project-memory-telemetry.md) for identity,
+attempt, failure, legacy and population-denominator boundaries.
 
 Enforcement requires a separate retrieval-class decision backed by labeled live
 shadow observations. Constructed benchmark success is not sufficient to let the
