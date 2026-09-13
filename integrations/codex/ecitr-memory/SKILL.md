@@ -29,6 +29,14 @@ Run from the project workspace so marker discovery and workspace attribution rem
 
 When an existing memory session or episode reference is available, pass its literal
 `--session-ref` or `--episode-id` with `--thread-ref` and `--lane` as applicable.
+For `--session-ref`, copy the exact `session_ref` returned by `open_memory_session`,
+including `memory/sessions/YYYY/MM/` and `.json`. Its bare `session_...` ID does not
+resolve as a session reference. The runtime reads the task project from that
+canonical session; no separate task-project flag is needed. If the task's project
+and the retrieval workspace intentionally differ, add
+`--task-workspace-relation cross_workspace`. This declares that relationship;
+it does not change retrieval scope or grant cross-project authority. Missing or
+invalid attribution stays visible as an unjoined opportunity.
 Use that same lifecycle identity on retries and no-consult records. The wrappers
 assign the opportunity and attempt automatically; do not add a separate logging
 call before a search. Missing lifecycle identity is reported as unjoined coverage.
@@ -83,6 +91,10 @@ other pre-capture failure exposes a capture gap and creates no fallback artifact
 The usage wrapper optionally accepts `--inspected-record-ids` and
 `--use-evidence-file`, containing decision/output and independent-support
 reference declarations. These remain self-reports until independently verified.
+When memory materially influences a decision or output, include its existing
+`decision_ref` or `output_ref` with the used record ID. Do not manufacture use or
+evidence to fill telemetry. References remain optional; reported use without them
+is recorded with an explicit reference-coverage gap.
 An empty callback and no recorded callback remain separate states.
 
 Use retrieved records as guidance only after checking their scope, lifecycle state, provenance, and applicability to the current source state.

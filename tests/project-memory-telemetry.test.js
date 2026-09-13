@@ -39,13 +39,14 @@ function search(f, extras = {}) {
   return f.surface.searchProjectMemory({ query: QUERY, taskPacket: TASK, telemetryContext: CONTEXT, ...extras });
 }
 
-test("stable opportunity binds exact episode and workspace; optional join metadata does not split it", (t) => {
+test("stable declared lifecycle identity does not imply verified episode attribution", (t) => {
   const f = fixture(t, { records: false });
   const build = (context, config = f.config, taskPacket = TASK) => buildOpportunity({ projectConfig: config, taskPacket, context, now: new Date("2026-09-12T00:00:00Z") }).opportunity;
   const first = build(CONTEXT);
   assert.equal(first.opportunity_id, build({ ...CONTEXT, run_ref: "later_run", thread_ref: "different_literal" }).opportunity_id);
   assert.equal(first.identity_basis, "episode_id");
   assert.equal(first.binding.thread_ref, "codex-thread://literal");
+  assert.equal(first.attribution.status, "invalid");
   assert.notEqual(first.opportunity_id, build({ ...CONTEXT, episode_id: "episode_2" }).opportunity_id);
   assert.notEqual(first.opportunity_id, build(CONTEXT, { ...f.config, workspace_id: "other" }).opportunity_id);
   assert.notEqual(first.opportunity_id, build(CONTEXT, { ...f.config, catalog_root: "/other/catalog" }).opportunity_id);
@@ -199,6 +200,8 @@ test("concurrent searches share one opportunity and retain each attempt and its 
   assert.equal(report.task_opportunities, 1);
   assert.equal(report.retrieval_attempts, 2);
   assert.equal(report.usage_callbacks, 2);
+  assert.equal(report.use_stages.reported_use_callbacks_without_complete_references, 2);
+  assert.deepEqual(report.use_stages.reported_used_record_ids_without_references, [CASE_ID]);
 });
 
 test("concurrent caller-selected processes atomically create one cross-day anchor without duplicate gate observations", async (t) => {
@@ -233,6 +236,9 @@ test("usage distinguishes preparation, inspection, declarations and missing or e
   assert.deepEqual(report.use_stages.reported_inspected_record_ids, [CASE_ID]);
   assert.deepEqual(report.use_stages.reported_used_record_ids, [CASE_ID]);
   assert.equal(report.use_stages.evidence_link_declarations, 1);
+  assert.equal(report.use_stages.reported_use_callbacks_without_complete_references, 0);
+  assert.deepEqual(report.use_stages.reported_used_record_ids_without_references, []);
+  assert.deepEqual(report.use_stages.reported_use_reference_coverage, { callbacks_with_complete_references: 1, reported_use_callbacks: 1 });
   assert.equal(report.use_stages.independently_corroborated_use.value, null);
   assert.equal(report.use_stages.measured_benefit.value, null);
   assert.throws(() => f.surface.recordMemoryUsage({ invocationId: id, usedRecordIds: [CASE_ID],

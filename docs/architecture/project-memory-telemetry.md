@@ -7,10 +7,11 @@ entry and the existing search/skip CLI wrappers are instrumented producers.
 
 ## Opportunity and attempt identity
 
-A new invocation has a nested `telemetry.schema_version: 1`, validated against
-`schemas/project_memory_telemetry.schema.json`. The outer invocation remains
-version 1 so old fields and selected-record receipts keep their meaning. Old
-artifacts are read without backfill. `logConsultation` remains a post-execution
+A new invocation has a nested `telemetry.schema_version: 2`, validated against
+`schemas/project_memory_telemetry_v2.schema.json`. Version 1 keeps its unchanged
+`schemas/project_memory_telemetry.schema.json` contract. The outer invocation
+remains version 1 so old fields and selected-record receipts keep their meaning.
+Old artifacts and anchors retain their version without backfill. `logConsultation` remains a post-execution
 compatibility surface and explicitly cannot prove a pre-decision opportunity
 or an instrumented attempt duration.
 
@@ -21,7 +22,44 @@ Optional joins cannot alter a supplied higher-priority episode identity.
 Callers must use the same identity source throughout that episode; supplying a
 new episode identity identifies new work. Missing lifecycle identity creates an
 explicit `unjoined_boundary` and a fresh ID, rather than conflating every use of
-the same task/thread. Absent context stays null with a reason.
+the same task/thread. Absent context stays null with a reason. These fields
+declare identity; their presence alone does not prove an exact source join.
+
+Version 2 adds `opportunity.attribution`: `status` is `absent`, `unresolved`,
+`invalid` or `verified`, with a bounded `reason` and `checked_at`. The existing
+source map's `agent_ops_registry_path` identifies the owner of canonical
+`memory/sessions/YYYY/MM/session_*.json` references. The runtime preserves the
+supplied reference exactly, checks the filename against the stored `id`, checks
+the literal `project_id` against one registry entry, and checks a supplied
+`thread_ref`. No alias, bare-ID expansion, nearest-session search, arbitrary URL
+or native-thread inference is performed. A missing session is unjoined; a bare
+ID is invalid. Failed attribution does not change the consult/skip policy.
+
+`task_project_id` comes from the session. `retrieval_workspace_id` comes from
+the marker and is not replaced by that task project. Their observed relation is
+`same_workspace` or `cross_workspace`. An unequal pair needs the caller's
+explicit `task_workspace_relation: cross_workspace` declaration; an absent
+declaration is unresolved and a contradictory one is invalid. This verifies
+source metadata and matching declarations, not the business appropriateness or
+authorization of the cross-workspace work. No redundant task-project CLI input
+is needed for a canonical session.
+
+`source_map`, `registry`, `session` and optional `run` source descriptors retain
+the exact reference and SHA-256 of inspected bytes, plus only relevant identity
+fields. All reads are local, bounded to 1 MiB each, regular-file only, reject
+symlink/path aliases, and check stable bytes during capture. A supplied canonical
+run reference must match the session's `run_ref`, the run's `session_ref` and
+project, and non-missing thread identities. Missing thread/run metadata stays
+missing; an active session receives no invented outcome. No business bodies are
+copied into telemetry.
+
+Before reusing an anchor, the producer checks supplied immutable episode,
+session, thread, task and workspace-relation declarations, plus observed stable
+session identity. Conflicts fail before changing its telemetry. A later optional
+run reference may be source-checked but cannot rebind the stored anchor. Hashes
+are capture-time provenance: a normal session closeout may change source bytes
+without changing the stable ID/project/thread relation. Existing version 1
+anchors remain attribution-unverified and are never silently upgraded.
 
 The first existing `meminv` is the opportunity anchor and first attempt. Its
 path is `memory-invocations/anchors/v1/meminv_opportunity_<hash>.json`, independent
@@ -92,6 +130,11 @@ corroborated use. No referenced file, URL or business output is followed by the
 callback. New metadata has bounded strings/lists and rejects invented verified
 fields. Callback writes preserve selected-record preparation receipts.
 
+References remain optional. Missing references do not reject an otherwise valid
+usage callback. Guidance asks callers to include a decision/output reference
+when memory materially influenced work, and reports expose reported-use callbacks
+and IDs without complete references.
+
 Reports distinguish returned IDs, content preparation, reported inspection,
 reported use, evidence-link declarations, independently corroborated use and
 measured benefit. The last two remain unavailable until an independent verifier
@@ -101,7 +144,15 @@ prove attention, host delivery or influence.
 
 ## Reporting and coverage
 
-Report version 2 groups versioned opportunities and counts attempts separately.
+Report version 3 groups versioned opportunities and counts attempts separately.
+`declared_lifecycle_task_opportunities` preserves the count with supplied lifecycle
+identity. `joined_task_opportunities` now counts only source-verified version 2
+attribution; `unjoined_task_opportunities` includes all other opportunities.
+`episode_attribution.by_status` separates verified, absent, unresolved, invalid,
+legacy-unverified and conflicting snapshots. This is source-metadata coverage,
+not task-outcome or business-intent verification. Version 1 remains readable and
+contributes its existing invocation/attempt/usage facts without acquiring a
+source-verified attribution claim.
 Shadow observations are split into `pre_decision_observations` (instrumented
 executor choice only) and `caller_selected_before_dispatch_observations`.
 `observed_opportunities`, proposed skips and mandatory overrides retain all
@@ -131,7 +182,10 @@ caller-supplied count or artifact population is not full-system coverage proof.
 
 Search and no-consult wrappers accept `--episode-id`, `--thread-ref`,
 `--session-ref`, `--run-ref`, `--lane`, `--audit-mode`, `--decision-reason` and
-`--retry-of`. Use existing literal lifecycle references; do not create a second
+`--retry-of`, plus `--task-workspace-relation same_workspace|cross_workspace`.
+Use the exact `session_ref` returned by `open_memory_session`, including its
+`memory/sessions/YYYY/MM/` path and `.json` suffix; a bare `session_...` ID is not
+resolvable context. Use existing literal lifecycle references; do not create a second
 tracking ID just for telemetry. No-consult also accepts `--query` and `--trigger`
 so shadow observation uses the actual task/trigger. A search failure that reached
 the producer returns the persisted invocation identity in its error envelope.
@@ -140,3 +194,7 @@ Usage adds `--inspected-record-ids` and `--use-evidence-file` (the bounded array
 of reference declarations described above). Existing search, selected-reader
 and empty-usage callbacks remain supported. No additional callback is required
 for reading or telemetry collection.
+
+Tests may inject `telemetrySourceMapPath` into `ProjectMemorySurface` to use an
+isolated owner fixture. CLI wrappers keep the existing checkout source-map route;
+there is no new arbitrary owner-root CLI override. See [ADR 0013](../adr/0013-project-memory-episode-attribution.md).

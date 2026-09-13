@@ -4,6 +4,7 @@ const path = require("node:path");
 const { TextDecoder } = require("node:util");
 const { performance } = require("node:perf_hooks");
 const { summarizeTelemetryArtifacts } = require("./project-memory-telemetry-report");
+const { inspectEpisodeAttribution, assertOpportunityContext } = require("./project-memory-context");
 const {
   validateTelemetry, buildOpportunity, startAttempt, observeBackend, getBackendObservation,
   buildUseEvidence, isTelemetryExcluded, unavailable,
@@ -57,9 +58,11 @@ class ProjectMemorySurface {
     artifactRoot,
     monotonicNow = () => performance.now(),
     wallNow = () => new Date(),
+    telemetrySourceMapPath,
   } = {}) {
     this.monotonicNow = monotonicNow;
     this.wallNow = wallNow;
+    this.telemetrySourceMapPath = telemetrySourceMapPath;
     this.catalog = catalog;
     this.retrievalRuntime = retrievalRuntime;
     this.retrievalGate = retrievalGate;
@@ -133,13 +136,20 @@ class ProjectMemorySurface {
 
   beginTaskOpportunity({ taskPacket, telemetryContext = {}, query, intent = "analysis", trigger = "discretionary", captureBoundary = "caller_selected_before_dispatch", now = new Date() } = {}) {
     if (!this.projectConfig || isTelemetryExcluded(telemetryContext)) return null;
-    const telemetry = buildOpportunity({ projectConfig: this.projectConfig, taskPacket, context: telemetryContext, now, captureBoundary });
+    const telemetry = buildOpportunity({ projectConfig: this.projectConfig, taskPacket, context: telemetryContext, now, captureBoundary,
+      sourceMapPath: this.telemetrySourceMapPath });
     const invocationId = `meminv_opportunity_${telemetry.opportunity.opportunity_id.slice(7)}`;
     const existingPath = findInvocationArtifactPath({ artifactRoot: this.artifactRoot, invocationId });
     let invocation;
+    const readExisting = (artifact, artifactPath) => {
+      validateTelemetry(artifact.telemetry);
+      assertOpportunityContext({ artifact, projectConfig: this.projectConfig, taskPacket, context: telemetryContext,
+        inspected: telemetry.opportunity.attribution });
+      return { result: invocationSummary(artifact, artifactPath) };
+    };
     if (existingPath) {
       invocation = updateMemoryInvocation({ artifactRoot: this.artifactRoot, invocationId,
-        update: (artifact, artifactPath) => ({ result: invocationSummary(artifact, artifactPath) }) });
+        update: readExisting });
     } else {
       try {
         invocation = writeMemoryInvocation({ artifactRoot: this.artifactRoot, projectConfig: this.projectConfig,
@@ -149,7 +159,7 @@ class ProjectMemorySurface {
         if (error.code !== "EEXIST") throw error;
         // Atomic creation may lose to another process at the same lifecycle boundary.
         invocation = updateMemoryInvocation({ artifactRoot: this.artifactRoot, invocationId,
-          update: (artifact, artifactPath) => ({ result: invocationSummary(artifact, artifactPath) }) });
+          update: readExisting });
       }
     }
     return updateMemoryInvocation({ artifactRoot: this.artifactRoot, invocationId, update: (artifact, artifactPath) => {
@@ -215,7 +225,8 @@ class ProjectMemorySurface {
   logConsultation({ taskPacket, consultTrigger, request = null, retrieval = null, catalogs,
     gateEvaluation = null, telemetryContext = {}, now = new Date() } = {}) {
     if (!this.projectConfig || isTelemetryExcluded(telemetryContext)) return null;
-    const telemetry = buildOpportunity({ projectConfig: this.projectConfig, taskPacket, context: telemetryContext, now, captureBoundary: "post_execution" });
+    const telemetry = buildOpportunity({ projectConfig: this.projectConfig, taskPacket, context: telemetryContext, now, captureBoundary: "post_execution",
+      sourceMapPath: this.telemetrySourceMapPath });
     telemetry.opportunity.decision = "consult";
     telemetry.opportunity.decision_at = now.toISOString();
     telemetry.opportunity.decision_reason = "post_execution_consultation";
@@ -229,6 +240,16 @@ class ProjectMemorySurface {
     if (isTelemetryExcluded(telemetryContext)) throw readerError("memory_telemetry_excluded");
     if (!this.projectConfig) return { ...await execute({ measure: async (_phase, action) => action(), captureCatalogs() {} }), memory_invocation: null };
     const anchor = opportunity ?? this.beginTaskOpportunity({ taskPacket, telemetryContext, query: query ?? request?.query, intent, trigger, now });
+    if (opportunity) {
+      const inspected = inspectEpisodeAttribution({ projectConfig: this.projectConfig, context: telemetryContext, now,
+        sourceMapPath: this.telemetrySourceMapPath });
+      updateMemoryInvocation({ artifactRoot: this.artifactRoot, invocationId: anchor.invocation_id,
+        update: (artifact) => {
+          validateTelemetry(artifact.telemetry);
+          assertOpportunityContext({ artifact, projectConfig: this.projectConfig, taskPacket, context: telemetryContext, inspected });
+          return { result: null };
+        } });
+    }
     this.decideTaskOpportunity({ opportunity: anchor, decision: "consult", trigger,
       reason: telemetryContext.decision_reason ?? "explicit_consultation", now: this.wallNow() });
     let invocation = updateMemoryInvocation({ artifactRoot: this.artifactRoot, invocationId: anchor.invocation_id,

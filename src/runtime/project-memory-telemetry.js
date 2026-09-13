@@ -3,16 +3,40 @@ const fs = require("node:fs");
 const Ajv = require("ajv");
 const addFormats = require("ajv-formats");
 const { structuralHash, readerError } = require("./project-memory-reader");
+const { inspectEpisodeAttribution, SESSION_REF, RUN_REF } = require("./project-memory-context");
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
-const validate = ajv.compile(require("../../schemas/project_memory_telemetry.schema.json"));
+ajv.addSchema(require("../../schemas/project_memory_telemetry.schema.json"), "project_memory_telemetry.schema.json");
+const validators = {
+  1: ajv.getSchema("project_memory_telemetry.schema.json"),
+  2: ajv.compile(require("../../schemas/project_memory_telemetry_v2.schema.json")),
+};
 function validateTelemetry(value) {
-  if (!validate(value)) throw readerError("invalid_memory_telemetry");
+  if (!validators[value?.schema_version]?.(value)) throw readerError("invalid_memory_telemetry");
+  if (value.schema_version === 2) {
+    const { binding, attribution } = value.opportunity;
+    const invalid = () => { throw readerError("invalid_memory_telemetry"); };
+    if (attribution.retrieval_workspace_id !== binding.workspace_id) invalid();
+    if (attribution.session && (attribution.session.ref !== binding.session_ref
+      || attribution.task_project_id !== attribution.session.project_id
+      || SESSION_REF.exec(attribution.session.ref)?.[1] !== attribution.session.id)) invalid();
+    if (attribution.run && (RUN_REF.exec(attribution.run.ref)?.[1] !== attribution.run.id
+      || attribution.run.ref !== binding.run_ref || attribution.run.session_ref !== binding.session_ref
+      || attribution.run.project_id !== attribution.task_project_id)) invalid();
+    if (attribution.status === "verified") {
+      const expectedRelation = attribution.task_project_id === binding.workspace_id ? "same_workspace" : "cross_workspace";
+      if (attribution.workspace_relation !== expectedRelation
+        || (binding.task_workspace_relation != null && binding.task_workspace_relation !== expectedRelation)
+        || (expectedRelation === "cross_workspace" && binding.task_workspace_relation !== "cross_workspace")
+        || (binding.thread_ref != null && binding.thread_ref !== attribution.session.thread_ref)
+        || (binding.run_ref != null && (!attribution.run || attribution.run.ref !== binding.run_ref))) invalid();
+    }
+  }
   return value;
 }
 
-const CONTEXT_FIELDS = ["episode_id", "thread_ref", "session_ref", "run_ref", "lane", "audit_mode", "decision_reason", "retry_of"];
+const CONTEXT_FIELDS = ["episode_id", "thread_ref", "session_ref", "run_ref", "lane", "audit_mode", "decision_reason", "retry_of", "task_workspace_relation"];
 const LANES = ["micro", "diagnostic", "governed-write", "promotion"];
 const AUDIT_MODES = ["strict_no_write", "strict no-write audit", "controlled_read_only", "controlled read-only discovery audit"];
 const KNOWN_PHASES = ["catalog_load", "gate_evaluation", "retrieval", "corpus_fingerprint"];
@@ -28,6 +52,7 @@ function validateTelemetryContext(context = {}) {
     }
     if (key === "lane" && value !== null && !LANES.includes(value)) throw readerError("invalid_telemetry_lane");
     if (key === "audit_mode" && value !== null && !AUDIT_MODES.includes(value)) throw readerError("invalid_telemetry_audit_mode");
+    if (key === "task_workspace_relation" && value !== null && !["same_workspace", "cross_workspace"].includes(value)) throw readerError("invalid_telemetry_workspace_relation");
   }
   return context;
 }
@@ -37,7 +62,7 @@ function isTelemetryExcluded(context = {}) {
   return context.lane === "micro" || ["strict_no_write", "strict no-write audit"].includes(context.audit_mode);
 }
 
-function buildOpportunity({ projectConfig, taskPacket, context = {}, now, captureBoundary = "caller_selected_before_dispatch" }) {
+function buildOpportunity({ projectConfig, taskPacket, context = {}, now, captureBoundary = "caller_selected_before_dispatch", sourceMapPath }) {
   validateTelemetryContext(context);
   const taskId = taskPacket?.task_id ?? null;
   if (taskId !== null && (typeof taskId !== "string" || !taskId.length || Buffer.byteLength(taskId) > 1024)) {
@@ -54,6 +79,7 @@ function buildOpportunity({ projectConfig, taskPacket, context = {}, now, captur
     thread_ref: context.thread_ref ?? null,
     session_ref: context.session_ref ?? null,
     run_ref: context.run_ref ?? null,
+    task_workspace_relation: context.task_workspace_relation ?? null,
   };
   const identity = {
     workspace_id: binding.workspace_id, workspace_root: binding.workspace_root,
@@ -61,12 +87,13 @@ function buildOpportunity({ projectConfig, taskPacket, context = {}, now, captur
     episode: identityBasis === "unjoined_boundary" ? crypto.randomUUID() : context[identityBasis],
   };
   return {
-    schema_version: 1,
+    schema_version: 2,
     opportunity: {
       opportunity_id: `memopp_${structuralHash(identity).slice(7)}`,
       recorded_at: now.toISOString(),
       identity_basis: identityBasis,
       binding,
+      attribution: inspectEpisodeAttribution({ projectConfig, context, now, sourceMapPath }),
       missing_context: Object.fromEntries(Object.entries(binding).filter(([, value]) => value === null)
         .map(([key]) => [key, "not_supplied"])),
       lane: context.lane ?? null,

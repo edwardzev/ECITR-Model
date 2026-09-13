@@ -38,7 +38,8 @@ function deliveryConflicts(left, right) {
   const same = (a, b) => structuralHash(a ?? null) === structuralHash(b ?? null);
   const immutable = (entry) => [entry.invocation_id, entry.workspace_id, entry.catalog_root, entry.marker_path,
     entry.consulted_at, entry.task_id, entry.telemetry?.schema_version, entry.telemetry?.opportunity?.opportunity_id,
-    entry.telemetry?.opportunity?.binding, entry.telemetry?.opportunity?.identity_basis, entry.telemetry?.opportunity?.capture_boundary];
+    entry.telemetry?.opportunity?.binding, entry.telemetry?.opportunity?.attribution,
+    entry.telemetry?.opportunity?.identity_basis, entry.telemetry?.opportunity?.capture_boundary];
   if (!same(immutable(left), immutable(right))) reasons.push("immutable_identity_conflict");
   const l = left.telemetry?.attempt;
   const r = right.telemetry?.attempt;
@@ -83,10 +84,10 @@ function deliveryRank(artifact) {
 function summarizeTelemetryArtifacts(input, { eligiblePopulation = null } = {}) {
   const artifacts = deduplicateArtifacts(input);
   const legacy = artifacts.filter((artifact) => !artifact.telemetry);
-  const unsupported = artifacts.filter((artifact) => artifact.telemetry && artifact.telemetry.schema_version !== 1);
+  const unsupported = artifacts.filter((artifact) => artifact.telemetry && ![1, 2].includes(artifact.telemetry.schema_version));
   const malformed = [];
   const supported = artifacts.filter((artifact) => {
-    if (artifact.telemetry?.schema_version !== 1) return false;
+    if (![1, 2].includes(artifact.telemetry?.schema_version)) return false;
     try { validateTelemetry(artifact.telemetry); return true; }
     catch { malformed.push(artifact); return false; }
   });
@@ -110,7 +111,10 @@ function summarizeTelemetryArtifacts(input, { eligiblePopulation = null } = {}) 
     const decisions = unique(group.map((entry) => entry.telemetry.opportunity.decision).filter((value) => value !== "pending"));
     const anchor = group.find((entry) => entry.invocation_id?.startsWith("meminv_opportunity_")) ?? group[0];
     const boundaries = unique(group.map((entry) => entry.telemetry.opportunity.capture_boundary));
-    return { ...anchor.telemetry.opportunity, decision: decisions.length > 1 ? "conflict" : decisions[0] ?? "pending",
+    const identities = unique(group.map((entry) => structuralHash({ binding: entry.telemetry.opportunity.binding,
+      attribution: entry.telemetry.opportunity.attribution ?? null })));
+    return { ...anchor.telemetry.opportunity, attribution_conflict: identities.length > 1,
+      decision: decisions.length > 1 ? "conflict" : decisions[0] ?? "pending",
       capture_boundary: boundaries.length > 1 ? "conflict" : boundaries[0] };
   });
   const attempts = [...attemptsById.entries()].filter(([key]) => !attemptConflicts.has(key)).map(([, attempt]) => attempt);
@@ -139,15 +143,28 @@ function summarizeTelemetryArtifacts(input, { eligiblePopulation = null } = {}) 
   const preparedIds = unique(callbacks.concat(consulted.filter((artifact) => !artifact.usage_recorded_at))
     .flatMap((artifact) => (artifact.read_receipts ?? []).flatMap((receipt) =>
       (receipt.results ?? []).filter((entry) => entry.result === "available").map((entry) => entry.record_id))));
+  const attributionState = (entry) => entry.attribution_conflict ? "conflict" : entry.attribution?.status ?? "legacy_unverified";
+  const missingUseReferences = used.map((artifact) => {
+    const linked = new Set((artifact.use_evidence?.links ?? []).filter((entry) => entry.decision_ref || entry.output_ref).map((entry) => entry.record_id));
+    return { artifact, missing: (artifact.used_returned_record_ids ?? artifact.used_record_ids ?? []).filter((id) => !linked.has(id)) };
+  });
   return {
-    report_schema_version: 2,
+    report_schema_version: 3,
     recorded_invocations: artifacts.length,
     duplicate_deliveries: input.length - artifacts.length - (artifacts.delivery_conflicts ?? []).reduce((sum, entry) => sum + entry.deliveries, 0),
     conflicting_deliveries: artifacts.delivery_conflicts ?? [],
     conflicting_attempt_ids: [...attemptConflicts].map((entry) => JSON.parse(entry)[1]),
     task_opportunities: opportunities.length,
-    joined_task_opportunities: opportunities.filter((entry) => entry.identity_basis !== "unjoined_boundary").length,
-    unjoined_task_opportunities: opportunities.filter((entry) => entry.identity_basis === "unjoined_boundary").length,
+    declared_lifecycle_task_opportunities: opportunities.filter((entry) => entry.identity_basis !== "unjoined_boundary").length,
+    joined_task_opportunities: opportunities.filter((entry) => attributionState(entry) === "verified").length,
+    unjoined_task_opportunities: opportunities.filter((entry) => attributionState(entry) !== "verified").length,
+    episode_attribution: {
+      scope: "source_metadata_and_declared_workspace_relation; outcome_and_business_intent_not_verified",
+      by_status: Object.fromEntries(["verified", "absent", "unresolved", "invalid", "legacy_unverified", "conflict"].map((state) =>
+        [state, opportunities.filter((entry) => attributionState(entry) === state).length])),
+      verified_cross_workspace: opportunities.filter((entry) => attributionState(entry) === "verified"
+        && entry.attribution.workspace_relation === "cross_workspace").length,
+    },
     opportunities_by_decision: Object.fromEntries(["pending", "consult", "skip", "blocked", "conflict"].map((decision) =>
       [decision, opportunities.filter((entry) => entry.decision === decision).length])),
     consultation_rate: ratio(opportunities.filter((entry) => entry.decision === "consult").length, opportunities.length),
@@ -188,6 +205,12 @@ function summarizeTelemetryArtifacts(input, { eligiblePopulation = null } = {}) 
       reported_inspected_record_ids: unique(callbacks.flatMap((entry) => entry.use_evidence?.inspected_record_ids ?? [])),
       reported_used_record_ids: usedIds,
       evidence_link_declarations: callbacks.reduce((sum, entry) => sum + (entry.use_evidence?.links?.length ?? 0), 0),
+      reported_use_callbacks_without_complete_references: missingUseReferences.filter((entry) => entry.missing.length).length,
+      reported_used_record_ids_without_references: unique(missingUseReferences.flatMap((entry) => entry.missing)),
+      reported_use_reference_coverage: used.length ? {
+        callbacks_with_complete_references: missingUseReferences.filter((entry) => !entry.missing.length).length,
+        reported_use_callbacks: used.length,
+      } : null,
       independently_corroborated_use: unavailable("independent_verifier_not_run"),
       measured_benefit: unavailable("matched_task_outcomes_not_evaluated"),
     },

@@ -1,0 +1,393 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Project memory derived invocation telemetry v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "opportunity",
+    "attempt"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "opportunity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "opportunity_id",
+        "recorded_at",
+        "identity_basis",
+        "binding",
+        "missing_context",
+        "lane",
+        "audit_mode",
+        "lane_reason",
+        "audit_mode_reason",
+        "capture_boundary",
+        "decision",
+        "decision_reason",
+        "decision_at",
+        "marker_sha256",
+        "policy",
+        "attribution"
+      ],
+      "properties": {
+        "opportunity_id": {
+          "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/opportunity_id"
+        },
+        "recorded_at": {
+          "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/recorded_at"
+        },
+        "identity_basis": {
+          "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/identity_basis"
+        },
+        "binding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "workspace_id",
+            "workspace_root",
+            "catalog_root",
+            "task_id",
+            "episode_id",
+            "thread_ref",
+            "session_ref",
+            "run_ref",
+            "task_workspace_relation"
+          ],
+          "properties": {
+            "workspace_id": {
+              "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/binding/properties/workspace_id"
+            },
+            "workspace_root": {
+              "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/binding/properties/workspace_root"
+            },
+            "catalog_root": {
+              "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/binding/properties/catalog_root"
+            },
+            "task_id": {
+              "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/binding/properties/task_id"
+            },
+            "episode_id": {
+              "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/binding/properties/episode_id"
+            },
+            "thread_ref": {
+              "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/binding/properties/thread_ref"
+            },
+            "session_ref": {
+              "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/binding/properties/session_ref"
+            },
+            "run_ref": {
+              "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/binding/properties/run_ref"
+            },
+            "task_workspace_relation": {
+              "enum": [
+                null,
+                "same_workspace",
+                "cross_workspace"
+              ]
+            }
+          }
+        },
+        "missing_context": {
+          "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/missing_context"
+        },
+        "lane": {
+          "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/lane"
+        },
+        "audit_mode": {
+          "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/audit_mode"
+        },
+        "lane_reason": {
+          "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/lane_reason"
+        },
+        "audit_mode_reason": {
+          "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/audit_mode_reason"
+        },
+        "capture_boundary": {
+          "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/capture_boundary"
+        },
+        "decision": {
+          "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/decision"
+        },
+        "decision_reason": {
+          "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/decision_reason"
+        },
+        "decision_at": {
+          "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/decision_at"
+        },
+        "marker_sha256": {
+          "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/marker_sha256"
+        },
+        "policy": {
+          "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/policy"
+        },
+        "gate_observation": {
+          "$ref": "project_memory_telemetry.schema.json#/properties/opportunity/properties/gate_observation"
+        },
+        "attribution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "reason",
+            "checked_at",
+            "task_project_id",
+            "retrieval_workspace_id",
+            "workspace_relation",
+            "source_map",
+            "registry",
+            "session",
+            "run"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "absent",
+                "unresolved",
+                "invalid",
+                "verified"
+              ]
+            },
+            "reason": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "checked_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "task_project_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "retrieval_workspace_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "workspace_relation": {
+              "enum": [
+                null,
+                "same_workspace",
+                "cross_workspace"
+              ]
+            },
+            "source_map": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "ref",
+                    "sha256"
+                  ],
+                  "properties": {
+                    "ref": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  }
+                }
+              ]
+            },
+            "registry": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "ref",
+                    "sha256"
+                  ],
+                  "properties": {
+                    "ref": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  }
+                }
+              ]
+            },
+            "session": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "ref",
+                    "sha256",
+                    "id",
+                    "project_id",
+                    "thread_ref"
+                  ],
+                  "properties": {
+                    "ref": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    },
+                    "project_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    },
+                    "thread_ref": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "minLength": 1,
+                      "maxLength": 1024
+                    }
+                  }
+                }
+              ]
+            },
+            "run": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "ref",
+                    "sha256",
+                    "id",
+                    "project_id",
+                    "session_ref",
+                    "thread_ref"
+                  ],
+                  "properties": {
+                    "ref": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    },
+                    "project_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    },
+                    "session_ref": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    },
+                    "thread_ref": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "minLength": 1,
+                      "maxLength": 1024
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "verified"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "null"
+                  },
+                  "task_project_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  },
+                  "workspace_relation": {
+                    "enum": [
+                      "same_workspace",
+                      "cross_workspace"
+                    ]
+                  },
+                  "source_map": {
+                    "type": "object"
+                  },
+                  "registry": {
+                    "type": "object"
+                  },
+                  "session": {
+                    "type": "object"
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "attempt": {
+      "$ref": "project_memory_telemetry.schema.json#/properties/attempt"
+    }
+  }
+}

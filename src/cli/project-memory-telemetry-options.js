@@ -4,6 +4,7 @@ const FLAGS = {
   "--episode-id": "episode_id", "--thread-ref": "thread_ref", "--session-ref": "session_ref",
   "--run-ref": "run_ref", "--lane": "lane", "--audit-mode": "audit_mode",
   "--decision-reason": "decision_reason", "--retry-of": "retry_of",
+  "--task-workspace-relation": "task_workspace_relation",
 };
 
 function readTelemetryOption(options, argument, value) {
