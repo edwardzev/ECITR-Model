@@ -13,6 +13,7 @@ async function refreshCodexIndex({
   includeSessions = true,
   includeArchived = true,
   workspaceRoot = null,
+  sourceSelection = null,
   skipStructuralCheck = false,
   validator = new EcitrValidator(),
   importRollouts = importCodexRollouts,
@@ -45,8 +46,16 @@ async function refreshCodexIndex({
     includeSessions,
     includeArchived,
     workspaceRoot,
+    sourceSelection,
     validator,
   });
+  summary.coverage = summary.rollouts.coverage ?? {
+    status: "partial",
+    candidate_rollouts: summary.rollouts.candidate_rollouts ?? 0,
+    accounted_rollouts: 0,
+    gap_count: summary.rollouts.candidate_rollouts ?? 0,
+    source_statuses: { unknown: summary.rollouts.candidate_rollouts ?? 0 },
+  };
   assertImportSummaryClean(summary.rollouts);
 
   if (dryRun) {
@@ -89,14 +98,22 @@ function defaultLoadCatalogs({ catalogRoot, validator }) {
 
 function runStructuralCheck({ importSummary, catalogs }) {
   const checks = [];
-  const accountedFor =
+  const accountedFor = importSummary.coverage?.accounted_rollouts ?? (
+    (importSummary.planned ?? 0) +
     (importSummary.imported ?? 0) +
     (importSummary.skipped_existing ?? 0) +
     (importSummary.skipped_unchanged ?? 0) +
     (importSummary.skipped_checkpoint ?? 0) +
     (importSummary.skipped_duplicate_source ?? 0) +
     (importSummary.skipped_no_visible_messages ?? 0) +
-    (importSummary.skipped_workspace_filter ?? 0);
+    (importSummary.skipped_workspace_filter ?? 0) +
+    (importSummary.rejected_unsupported ?? 0) +
+    (importSummary.rejected_partial ?? 0) +
+    (importSummary.rejected_malformed ?? 0) +
+    (importSummary.repair_required ?? 0) +
+    (importSummary.not_attempted ?? 0) +
+    (importSummary.conflicts ?? 0) +
+    (importSummary.errors ?? 0));
 
   checks.push({
     name: "accounted_rollouts",
@@ -127,7 +144,8 @@ function runStructuralCheck({ importSummary, catalogs }) {
 }
 
 function assertImportSummaryClean(summary) {
-  if ((summary.errors ?? 0) > 0 || (summary.conflicts ?? 0) > 0) {
+  if ((summary.errors ?? 0) > 0 || (summary.conflicts ?? 0) > 0 || (summary.repair_required ?? 0) > 0
+    || summary.preflight?.status === "blocked") {
     const error = new Error("codex rollout refresh reported conflicts or errors.");
     error.summary = summary;
     throw error;

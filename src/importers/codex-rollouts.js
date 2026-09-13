@@ -14,6 +14,7 @@ const { CodexImportState } = require("./codex-import-state");
 const { FileBackedCatalog } = require("../storage/file-backed-catalog");
 const { EcitrValidator } = require("../validation/validator");
 const { isPathWithinRoots, resolveWorkspaceIdForCodex } = require("../workspace/source-mapping");
+const { PARSER_VERSION, parseRolloutEvents, extractVisibleMessages } = require("./codex-visible-messages");
 
 const PAYLOAD_NAMESPACE_SEGMENTS = Object.freeze(["codex", "rollouts"]);
 const SOURCE_LOCATOR_PREFIX = "codex-thread://";
@@ -33,6 +34,7 @@ function importCodexRollouts({
   includeArchived = true,
   workspaceRoot = null,
   workspaceId = null,
+  sourceSelection = null,
   validator = new EcitrValidator(),
 } = {}) {
   if (!codexRoot) {
@@ -56,6 +58,17 @@ function importCodexRollouts({
     includeSessions,
     includeArchived,
   });
+  // Pin and validate the whole selected batch before any catalog or ledger write.
+  // The import below uses these same bytes even if a live rollout later grows.
+  const selectedSources = sourceSelection === null ? null : prepareSelectedSources({
+    sourceSelection,
+    rolloutFiles,
+  });
+  const candidateFiles = selectedSources ? [...selectedSources.keys()] : rolloutFiles;
+  if (selectedSources && limit < selectedSources.size) {
+    throw new Error("Codex source selection cannot be truncated by an import limit.");
+  }
+  const scopeKey = createSha256(JSON.stringify({ workspaceRoots, workspaceId }));
   const catalog = new FileBackedCatalog({
     rootDir: resolvedCatalogRoot,
     validator,
@@ -88,6 +101,12 @@ function importCodexRollouts({
       archived: true,
     },
     import_state_file: importState.filePath,
+    parser_version: PARSER_VERSION,
+    source_selection: selectedSources ? [...selectedSources.values()].map((entry) => ({
+      path: entry.sourcePath,
+      sha256: entry.sourceHash,
+      thread_id: entry.threadId,
+    })) : null,
     scanned_files: rolloutFiles.length,
     candidate_rollouts: 0,
     eligible_rollouts: 0,
@@ -99,45 +118,101 @@ function importCodexRollouts({
     skipped_duplicate_source: 0,
     skipped_no_visible_messages: 0,
     skipped_workspace_filter: 0,
+    rejected_unsupported: 0,
+    rejected_partial: 0,
+    rejected_malformed: 0,
+    repair_required: 0,
+    not_attempted: 0,
     conflicts: 0,
     errors: 0,
     case_seed_chat_links_attached: 0,
     case_seed_chat_links_seen_existing: 0,
+    case_seed_linking: selectedSources ? "suppressed_evidence_only_selection" : "enabled",
     sample_results: [],
     conflict_details: [],
     error_details: [],
+    coverage: createCoverageSummary(),
   };
+  if (selectedSources) {
+    summary.source_results = [];
+    summary.preflight = preflightSelectedSources({
+      selectedSources, sessionIndex, workspaceRoots, workspaceId,
+      catalog, catalogRoot: resolvedCatalogRoot, payloadStore,
+      validator, evidenceCorrectionIndex, latestSnapshots,
+    });
+    if (summary.preflight.status === "blocked") {
+      for (const result of summary.preflight.sources) {
+        const outcome = result.status === "passed" ? "not_attempted" : result.status;
+        summary.candidate_rollouts += 1;
+        summary[outcome] += 1;
+        recordCoverage(summary, {
+          sourcePath: result.path, sourceLocator: `${SOURCE_LOCATOR_PREFIX}${result.thread_id}`,
+          status: result.coverage_status, outcome, sourceHash: result.sha256, format: result.format,
+        });
+      }
+      finalizeCoverage(summary);
+      return summary;
+    }
+  }
   const seenEvidenceIds = new Map();
 
-  for (const rolloutFilePath of rolloutFiles) {
+  for (const rolloutFilePath of candidateFiles) {
     if (summary.candidate_rollouts >= limit) {
       break;
     }
 
+    let candidateWriteState = { payload: "not_attempted", evidence: "not_attempted", seed_links: "not_attempted" };
+    const selected = selectedSources?.get(rolloutFilePath);
     try {
       summary.candidate_rollouts += 1;
-      const sourceStat = fs.statSync(rolloutFilePath);
-      const sourceFingerprint = createSourceFingerprint(sourceStat);
-      if (importState.getSourceFingerprint(rolloutFilePath) === sourceFingerprint) {
+      let sourceStat = selected?.sourceStat ?? fs.statSync(rolloutFilePath);
+      let sourceFingerprint = createSourceFingerprint(sourceStat);
+      const cached = importState.getSourceEntry(rolloutFilePath);
+      if (cached?.fingerprint === sourceFingerprint && cached.parser_version === PARSER_VERSION
+        && cached.scope_key === scopeKey && (!selected || cached.source_hash === selected.sourceHash)) {
         summary.skipped_unchanged += 1;
+        const cachedCoverage = cached.coverage_status ?? "unknown";
+        recordCoverage(summary, {
+          sourcePath: rolloutFilePath,
+          sourceLocator: cached.source_locator,
+          status: cachedCoverage,
+          format: cached.format,
+          cached: true,
+          outcome: cached.outcome ?? "unknown",
+          sourceHash: cached.source_hash,
+          diagnosticCount: cached.diagnostic_count,
+          diagnostics: cached.diagnostics,
+          projectionCounts: cached.projection_counts,
+        });
+        if (cached.message_count > 0 && cachedCoverage === "supported") {
+          summary.eligible_rollouts += 1;
+        }
         pushCapped(summary.sample_results, {
           status: "skipped_unchanged",
           evidence_id: null,
           source_locator: path.resolve(rolloutFilePath),
           verbatim_payload_ref: null,
+          coverage_status: cachedCoverage,
+          cached_outcome: cached.outcome ?? "unknown",
         }, MAX_SAMPLE_RESULTS);
         continue;
       }
 
-      const sourceBytes = fs.readFileSync(rolloutFilePath);
-      const parsed = parseCodexRollout({
+      const capturedSource = selected ?? readSourceSnapshot(rolloutFilePath);
+      const sourceBytes = capturedSource.sourceBytes;
+      sourceStat = capturedSource.sourceStat;
+      sourceFingerprint = createSourceFingerprint(sourceStat);
+      const parsed = selected?.parsed ?? parseCodexRollout({
         sourcePath: rolloutFilePath,
+        sourceHash: selected?.sourceHash,
+        sourceLocator: selected ? `${SOURCE_LOCATOR_PREFIX}${selected.threadId}` : null,
         sourceBytes,
         sourceStat,
         sessionIndex,
       });
       if (workspaceRoots.length > 0 && !isPathWithinRoots(parsed.cwd, workspaceRoots)) {
         summary.skipped_workspace_filter += 1;
+        recordCoverage(summary, { ...parsed, status: "workspace_filtered", outcome: "skipped_workspace_filter" });
         pushCapped(summary.sample_results, {
           status: "skipped_workspace_filter",
           evidence_id: null,
@@ -146,10 +221,54 @@ function importCodexRollouts({
         }, MAX_SAMPLE_RESULTS);
         continue;
       }
+      const cacheMetadata = {
+        parser_version: PARSER_VERSION,
+        scope_key: scopeKey,
+        source_hash: parsed.sourceHash,
+        source_locator: parsed.sourceLocator,
+        thread_id: parsed.threadId,
+        cwd: parsed.cwd,
+        format: parsed.format,
+        message_count: parsed.messageCount,
+        coverage_status: parsed.coverageStatus,
+        diagnostic_count: parsed.diagnosticCount,
+        diagnostics: parsed.diagnostics,
+        projection_counts: parsed.projectionCounts,
+      };
+      const latestSnapshot = latestSnapshots.get(parsed.sourceLocator) ?? null;
+      if (["supported", "no_visible_messages"].includes(parsed.coverageStatus)
+        && requiresSnapshotRepair({ parsed, latestSnapshot })) {
+        summary.repair_required += 1;
+        recordCoverage(summary, { ...parsed, status: "repair_required", outcome: "repair_required" });
+        pushCapped(summary.conflict_details, {
+          source_locator: parsed.sourceLocator,
+          evidence_id: latestSnapshot.record.evidence_id,
+          code: "parser_upgrade_requires_immutable_snapshot_repair",
+        });
+        continue;
+      }
+      if (parsed.coverageStatus === "unsupported" || parsed.coverageStatus === "partial") {
+        const outcome = `rejected_${parsed.coverageStatus}`;
+        summary[outcome] += 1;
+        recordCoverage(summary, { ...parsed, status: parsed.coverageStatus, outcome });
+        if (!dryRun) {
+          importState.setSourceFingerprint(rolloutFilePath, sourceFingerprint, { ...cacheMetadata, outcome });
+        }
+        pushCapped(summary.error_details, {
+          source_locator: parsed.sourceLocator,
+          source_path: parsed.sourcePath,
+          code: outcome,
+          diagnostics: parsed.diagnostics,
+        });
+        continue;
+      }
       if (parsed.visibleMessages.length === 0) {
         summary.skipped_no_visible_messages += 1;
+        recordCoverage(summary, { ...parsed, status: "no_visible_messages", outcome: "skipped_no_visible_messages" });
         if (!dryRun) {
-          importState.setSourceFingerprint(rolloutFilePath, sourceFingerprint);
+          importState.setSourceFingerprint(rolloutFilePath, sourceFingerprint, {
+            ...cacheMetadata, outcome: "skipped_no_visible_messages",
+          });
         }
         pushCapped(summary.sample_results, {
           status: "skipped_no_visible_messages",
@@ -161,15 +280,15 @@ function importCodexRollouts({
       }
 
       summary.eligible_rollouts += 1;
-      const latestSnapshot = latestSnapshots.get(parsed.sourceLocator) ?? null;
       const checkpoint = determineCheckpoint({
         parsed,
         latestSnapshot,
       });
       if (!checkpoint.shouldSnapshot) {
         summary.skipped_checkpoint += 1;
+        recordCoverage(summary, { ...parsed, status: "supported", outcome: "skipped_checkpoint" });
         if (!dryRun) {
-          importState.setSourceFingerprint(rolloutFilePath, sourceFingerprint);
+          importState.setSourceFingerprint(rolloutFilePath, sourceFingerprint, { ...cacheMetadata, outcome: "skipped_checkpoint" });
         }
         pushCapped(summary.sample_results, {
           status: "skipped_checkpoint",
@@ -190,8 +309,9 @@ function importCodexRollouts({
       if (duplicate) {
         if (duplicate.sourceHash === parsed.sourceHash) {
           summary.skipped_duplicate_source += 1;
+          recordCoverage(summary, { ...parsed, status: "supported", outcome: "skipped_duplicate_source" });
           if (!dryRun) {
-            importState.setSourceFingerprint(rolloutFilePath, sourceFingerprint);
+            importState.setSourceFingerprint(rolloutFilePath, sourceFingerprint, { ...cacheMetadata, outcome: "skipped_duplicate_source" });
           }
           pushCapped(summary.sample_results, {
             status: "skipped_duplicate_source",
@@ -203,6 +323,7 @@ function importCodexRollouts({
         }
 
         summary.conflicts += 1;
+        recordCoverage(summary, { ...parsed, status: "conflict", outcome: "conflict" });
         pushCapped(summary.conflict_details, {
           evidence_id: snapshotPlan.evidenceId,
           source_locator: parsed.sourceLocator,
@@ -240,6 +361,7 @@ function importCodexRollouts({
         workspaceId: resolvedWorkspaceId,
         evidenceCorrectionIndex,
       });
+      candidateWriteState = { ...candidateWriteState, ...outcome.writeState };
 
       if (outcome.status === "planned") {
         summary.planned += 1;
@@ -255,34 +377,65 @@ function importCodexRollouts({
           conflict_fields: outcome.mismatches,
         });
       }
-
       if (!dryRun && outcome.status !== "conflict") {
-        importState.setSourceFingerprint(rolloutFilePath, sourceFingerprint);
-        const linkOutcome = caseSeedStore.attachChatEvidence({
-          threadRef: outcome.record.source_locator,
-          chatEvidenceRef: snapshotPlan.evidenceId,
-          now: outcome.record.captured_at,
-        });
-        summary.case_seed_chat_links_attached += linkOutcome.attached;
-        summary.case_seed_chat_links_seen_existing += linkOutcome.seen_existing;
+        if (selectedSources) {
+          candidateWriteState.seed_links = "suppressed_evidence_only_selection";
+        } else {
+          candidateWriteState.seed_links = "uncertain";
+          const linkOutcome = caseSeedStore.attachChatEvidence({
+            threadRef: outcome.record.source_locator,
+            chatEvidenceRef: snapshotPlan.evidenceId,
+            now: outcome.record.captured_at,
+          });
+          summary.case_seed_chat_links_attached += linkOutcome.attached;
+          summary.case_seed_chat_links_seen_existing += linkOutcome.seen_existing;
+          candidateWriteState.seed_links = "completed";
+        }
+        importState.setSourceFingerprint(rolloutFilePath, sourceFingerprint, { ...cacheMetadata, outcome: outcome.status });
       }
+      recordCoverage(summary, {
+        ...parsed,
+        status: outcome.status === "conflict" ? "conflict" : "supported",
+        outcome: outcome.status,
+        evidenceId: outcome.record.evidence_id,
+        writeState: candidateWriteState,
+      });
       updateLatestSnapshotState(latestSnapshots, outcome);
 
       pushCapped(summary.sample_results, toSampleResult(outcome), MAX_SAMPLE_RESULTS);
     } catch (error) {
-      summary.errors += 1;
+      const malformed = error.code === "malformed_rollout";
+      summary[malformed ? "rejected_malformed" : "errors"] += 1;
+      recordCoverage(summary, {
+        sourcePath: rolloutFilePath,
+        status: malformed ? "malformed" : "error",
+        outcome: malformed ? "rejected_malformed" : "error",
+        writeState: { ...candidateWriteState, ...error.writeState },
+      });
       pushCapped(summary.error_details, {
         source_locator: path.resolve(rolloutFilePath),
-        message: error.message,
+        code: error.code ?? "rollout_import_error",
+        ...(Number.isInteger(error.line) ? { line: error.line } : {}),
       });
     }
   }
 
   if (!dryRun) {
-    importState.pruneSources(rolloutFiles);
-    importState.save();
+    if (!selectedSources && includeSessions && includeArchived) {
+      importState.pruneSources(rolloutFiles);
+    }
+    try {
+      importState.save();
+      summary.state_persistence = { status: "written" };
+    } catch {
+      summary.errors += 1;
+      summary.state_persistence = { status: "failed", code: "import_state_write_failed" };
+    }
+  } else {
+    summary.state_persistence = { status: "skipped_dry_run" };
   }
 
+  finalizeCoverage(summary);
   return summary;
 }
 
@@ -318,10 +471,14 @@ function importSingleCodexRollout({
   if (comparison) {
     if (
       comparison.mismatches.length === 0
-      || isEquivalentLegacyCodexSnapshot(
+      || (parsed.format === "legacy" && isEquivalentLegacyCodexSnapshot(
         comparison.currentRecord,
         comparison.comparableExpected,
-      )
+        {
+          existingMessages: deriveSnapshotMetadata({ record: comparison.currentRecord, catalogRoot: catalog.rootDir }).messages,
+          nextMessages: parsed.visibleMessages,
+        },
+      ))
     ) {
       return {
         status: "skipped_existing",
@@ -337,6 +494,12 @@ function importSingleCodexRollout({
     };
   }
 
+  const existingPayloadPath = path.join(payloadStore.rootDir, snapshotPlan.payloadRef);
+  if (fs.existsSync(existingPayloadPath)
+    && createSha256(fs.readFileSync(existingPayloadPath)) !== snapshotPlan.payloadHash) {
+    return { status: "conflict", record, mismatches: ["payload_hash"] };
+  }
+
   if (dryRun) {
     return {
       status: "planned",
@@ -345,36 +508,37 @@ function importSingleCodexRollout({
     };
   }
 
-  payloadStore.writePayload({
-    evidenceId: snapshotPlan.evidenceId,
-    capturedAt: snapshotPlan.capturedAt,
-    extension: ".json",
-    namespaceSegments: PAYLOAD_NAMESPACE_SEGMENTS,
-    bytes: snapshotPlan.payloadBytes,
-  });
-  const persisted = catalog.writeRecord("evidence", record);
+  const writeState = { payload: "uncertain", evidence: "not_attempted" };
+  let persisted;
+  try {
+    payloadStore.writePayload({
+      evidenceId: snapshotPlan.evidenceId,
+      capturedAt: snapshotPlan.capturedAt,
+      extension: ".json",
+      namespaceSegments: PAYLOAD_NAMESPACE_SEGMENTS,
+      bytes: snapshotPlan.payloadBytes,
+    });
+    writeState.payload = "written";
+    writeState.evidence = "uncertain";
+    persisted = catalog.writeRecord("evidence", record);
+    writeState.evidence = "written";
+  } catch (error) {
+    error.writeState = writeState;
+    throw error;
+  }
 
   return {
     status: "imported",
     record,
     record_file: persisted.filePath,
     metadata: deriveSnapshotMetadataFromPayload(snapshotPlan.payload),
+    writeState,
   };
 }
 
-function parseCodexRollout({ sourcePath, sourceBytes, sourceStat, sessionIndex }) {
-  const lines = sourceBytes.toString("utf8").split("\n").filter(Boolean);
-  if (lines.length === 0) {
-    throw new Error(`Codex rollout file is empty: ${sourcePath}`);
-  }
-
-  const events = lines.map((line) => JSON.parse(line));
-  const sessionMetaEvent = events.find((event) => event.type === "session_meta");
-  if (!sessionMetaEvent?.payload?.id) {
-    throw new Error(`Codex rollout is missing session_meta.id: ${sourcePath}`);
-  }
-
-  const sessionMeta = sessionMetaEvent.payload;
+function parseCodexRollout({ sourcePath, sourceBytes, sourceStat, sessionIndex = new Map() }) {
+  const events = parseRolloutEvents(sourceBytes);
+  const sessionMeta = readSessionIdentity(events);
   const threadId = sessionMeta.id;
   const sessionIndexEntry = sessionIndex.get(threadId) ?? null;
   const sourceFilePath = path.resolve(sourcePath);
@@ -382,37 +546,13 @@ function parseCodexRollout({ sourcePath, sourceBytes, sourceStat, sessionIndex }
     sourcePath,
     sourceStat,
   });
-  const visibleMessages = [];
-  let finalAnswerCount = 0;
-
-  for (const event of events) {
-    if (event.type !== "event_msg") {
-      continue;
-    }
-
-    if (event.payload?.type === "user_message") {
-      visibleMessages.push({
-        sequence: visibleMessages.length + 1,
-        timestamp: event.timestamp,
-        role: "user",
-        phase: null,
-        text: event.payload.message,
-      });
-      continue;
-    }
-
-    if (event.payload?.type === "agent_message") {
-      if (event.payload.phase === "final_answer") {
-        finalAnswerCount += 1;
-      }
-      visibleMessages.push({
-        sequence: visibleMessages.length + 1,
-        timestamp: event.timestamp,
-        role: "assistant",
-        phase: event.payload.phase ?? null,
-        text: event.payload.message,
-      });
-    }
+  const extracted = extractVisibleMessages(events, threadId);
+  const { visibleMessages, finalAnswerCount } = extracted;
+  const otherIdentity = events.find(({ event }) => event.type === "session_meta" && event.payload?.id !== threadId);
+  if (otherIdentity || sessionMeta.forked_from_id || sessionMeta.parent_thread_id) {
+    extracted.coverageStatus = visibleMessages.length > 0 ? "partial" : "unsupported";
+    extracted.diagnosticCount += 1;
+    extracted.diagnostics.push({ line: otherIdentity?.line ?? 1, code: "inherited_thread_scope_unsupported" });
   }
 
   const lastVisibleMessageAt = resolveCapturedAt({
@@ -442,6 +582,12 @@ function parseCodexRollout({ sourcePath, sourceBytes, sourceStat, sessionIndex }
     projectScope: "project",
     actorScope: inferActorScope(visibleMessages),
     visibleMessages,
+    format: extracted.format,
+    coverageStatus: extracted.coverageStatus,
+    diagnostics: extracted.diagnostics,
+    diagnosticCount: extracted.diagnosticCount,
+    projectionCounts: extracted.projectionCounts,
+    messageMetadata: extracted.messageMetadata,
     sourceHash: createSha256(sourceBytes),
   };
 }
@@ -476,6 +622,15 @@ function buildSnapshotPlan({ parsed, latestSnapshot, checkpointReason }) {
     message_count: parsed.messageCount,
     final_answer_count: parsed.finalAnswerCount,
     messages: parsed.visibleMessages,
+    ...(parsed.format !== "legacy" ? {
+      capture_parser: {
+        version: PARSER_VERSION,
+        format: parsed.format,
+        coverage_status: parsed.coverageStatus,
+        projection_counts: parsed.projectionCounts,
+      },
+      message_metadata: parsed.messageMetadata,
+    } : {}),
   };
   const payloadBytes = `${JSON.stringify(payload, null, 2)}\n`;
 
@@ -524,8 +679,14 @@ function loadSessionIndex(codexRoot) {
     return entries;
   }
 
-  for (const line of fs.readFileSync(filePath, "utf8").split("\n").filter(Boolean)) {
-    const entry = JSON.parse(line);
+  for (const [index, line] of fs.readFileSync(filePath, "utf8").split("\n").entries()) {
+    if (!line) continue;
+    let entry;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      throw new Error(`Codex session index has invalid JSON at line ${index + 1}.`);
+    }
     if (entry?.id && typeof entry.id === "string") {
       entries.set(entry.id, entry);
     }
@@ -552,6 +713,174 @@ function listRolloutFiles({ codexRoot, includeSessions, includeArchived }) {
   }
 
   return files.sort((left, right) => left.localeCompare(right));
+}
+
+function prepareSelectedSources({ sourceSelection, rolloutFiles }) {
+  if (!Array.isArray(sourceSelection) || sourceSelection.length === 0 || sourceSelection.length > 1000) {
+    throw new Error("Codex source selection requires between 1 and 1000 entries.");
+  }
+  const allowed = new Set(rolloutFiles.map((entry) => path.resolve(entry)));
+  const selected = new Map();
+  for (const [index, entry] of sourceSelection.entries()) {
+    if (!entry || typeof entry.path !== "string" || !path.isAbsolute(entry.path)
+      || path.resolve(entry.path) !== entry.path || !/^sha256:[a-f0-9]{64}$/.test(entry.sha256 ?? "")
+      || !/^[A-Za-z0-9_-]+$/.test(entry.threadId ?? "")) {
+      throw new Error(`Codex source selection has an invalid path, hash or thread id at entry ${index + 1}.`);
+    }
+    if (selected.has(entry.path)) throw new Error(`Codex source selection repeats a path at entry ${index + 1}.`);
+    if (!allowed.has(entry.path) || fs.realpathSync(entry.path) !== entry.path) {
+      throw new Error(`Codex source selection is missing or outside the enabled source roots at entry ${index + 1}.`);
+    }
+    const snapshot = readSourceSnapshot(entry.path);
+    if (snapshot.sourceHash !== entry.sha256) {
+      throw new Error(`Codex source selection hash mismatch at entry ${index + 1}.`);
+    }
+    const identity = readSessionIdentity(parseRolloutEvents(snapshot.sourceBytes));
+    if (identity.id !== entry.threadId) {
+      throw new Error(`Codex source selection thread identity mismatch at entry ${index + 1}.`);
+    }
+    selected.set(entry.path, { ...snapshot, sourcePath: entry.path, threadId: identity.id });
+  }
+  return selected;
+}
+
+function readSourceSnapshot(sourcePath) {
+  const descriptor = fs.openSync(sourcePath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+  try {
+    const sourceStat = fs.fstatSync(descriptor);
+    if (!sourceStat.isFile()) throw new Error("Codex rollout source must be a regular file.");
+    const sourceBytes = fs.readFileSync(descriptor);
+    const after = fs.fstatSync(descriptor);
+    if (sourceStat.size !== sourceBytes.length || sourceStat.size !== after.size
+      || sourceStat.mtimeMs !== after.mtimeMs || sourceStat.ctimeMs !== after.ctimeMs) {
+      const error = new Error("Codex rollout changed during source capture.");
+      error.code = "source_changed_during_read";
+      throw error;
+    }
+    return { sourceBytes, sourceStat, sourceHash: createSha256(sourceBytes) };
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
+function readSessionIdentity(events) {
+  const session = events.find(({ event }) => event.type === "session_meta");
+  if (!session || typeof session.event.payload?.id !== "string"
+    || !/^[A-Za-z0-9_-]+$/.test(session.event.payload.id)) {
+    const error = new Error("Codex rollout is missing a supported session identity.");
+    error.code = "malformed_rollout";
+    error.line = session?.line ?? 1;
+    throw error;
+  }
+  return session.event.payload;
+}
+
+function preflightSelectedSources({
+  selectedSources, sessionIndex, workspaceRoots, workspaceId, catalog, catalogRoot,
+  payloadStore, validator, evidenceCorrectionIndex, latestSnapshots,
+}) {
+  const latest = new Map(latestSnapshots);
+  const identities = new Map();
+  const sources = [];
+  for (const source of selectedSources.values()) {
+    const result = { path: source.sourcePath, thread_id: source.threadId, sha256: source.sourceHash };
+    try {
+      const parsed = parseCodexRollout({ ...source, sessionIndex });
+      source.parsed = parsed;
+      result.coverage_status = parsed.coverageStatus;
+      result.format = parsed.format;
+      const latestSnapshot = latest.get(parsed.sourceLocator) ?? null;
+      if (["supported", "no_visible_messages"].includes(parsed.coverageStatus)
+        && requiresSnapshotRepair({ parsed, latestSnapshot })) {
+        result.status = "repair_required";
+        result.coverage_status = "repair_required";
+      } else if (parsed.coverageStatus !== "supported") {
+        result.status = parsed.coverageStatus === "no_visible_messages"
+          ? "skipped_no_visible_messages" : `rejected_${parsed.coverageStatus}`;
+        result.diagnostics = parsed.diagnostics;
+      } else if (workspaceRoots.length > 0 && !isPathWithinRoots(parsed.cwd, workspaceRoots)) {
+        result.status = "skipped_workspace_filter";
+        result.coverage_status = "workspace_filtered";
+      } else {
+        const checkpoint = determineCheckpoint({ parsed, latestSnapshot });
+        if (checkpoint.shouldSnapshot) {
+          const snapshotPlan = buildSnapshotPlan({ parsed, latestSnapshot, checkpointReason: checkpoint.reason });
+          const previous = identities.get(snapshotPlan.evidenceId);
+          if (previous && previous !== snapshotPlan.sourceHash) {
+            result.status = "conflicts";
+            result.coverage_status = "conflict";
+          } else {
+            identities.set(snapshotPlan.evidenceId, snapshotPlan.sourceHash);
+            const outcome = importSingleCodexRollout({
+              parsed, snapshotPlan, catalog, payloadStore, dryRun: true, validator,
+              latestSnapshot, evidenceCorrectionIndex,
+              workspaceId: resolveWorkspaceIdForCodex({ cwd: parsed.cwd, workspaceId, catalogRoot }),
+            });
+            if (outcome.status === "conflict") {
+              result.status = "conflicts";
+              result.coverage_status = "conflict";
+              result.conflict_fields = outcome.mismatches;
+            } else {
+              updateLatestSnapshotState(latest, outcome);
+            }
+          }
+        }
+        result.status ??= "passed";
+      }
+    } catch (error) {
+      result.status = error.code === "malformed_rollout" ? "rejected_malformed" : "errors";
+      result.coverage_status = error.code === "malformed_rollout" ? "malformed" : "error";
+      result.code = error.code ?? "preflight_error";
+      if (Number.isInteger(error.line)) result.line = error.line;
+    }
+    sources.push(result);
+  }
+  return { status: sources.every((source) => source.status === "passed") ? "passed" : "blocked", sources };
+}
+
+function createCoverageSummary() {
+  return { status: "empty", candidate_rollouts: 0, accounted_rollouts: 0, gap_count: 0, cached_sources: 0,
+    source_statuses: {}, formats: {}, gap_details: [] };
+}
+
+function recordCoverage(summary, entry) {
+  if (!summary._coverageEntries) {
+    Object.defineProperty(summary, "_coverageEntries", { value: new Map(), enumerable: false });
+  }
+  const sourcePath = entry.sourcePath;
+  summary._coverageEntries.set(sourcePath, {
+    path: sourcePath,
+    source_locator: entry.sourceLocator ?? null,
+    source_hash: entry.sourceHash ?? null,
+    status: entry.outcome,
+    coverage_status: entry.status,
+    format: entry.format ?? "unknown",
+    cached: entry.cached ?? false,
+    ...(entry.evidenceId ? { evidence_id: entry.evidenceId } : {}),
+    ...(entry.writeState ? { write_state: entry.writeState } : {}),
+    ...(entry.diagnosticCount ? { diagnostic_count: entry.diagnosticCount, diagnostics: entry.diagnostics } : {}),
+    ...(entry.projectionCounts ? { projection_counts: entry.projectionCounts } : {}),
+  });
+}
+
+function finalizeCoverage(summary) {
+  const entries = [...(summary._coverageEntries?.values() ?? [])];
+  const coverage = createCoverageSummary();
+  coverage.candidate_rollouts = summary.candidate_rollouts;
+  coverage.accounted_rollouts = entries.length;
+  for (const entry of entries) {
+    coverage.source_statuses[entry.coverage_status] = (coverage.source_statuses[entry.coverage_status] ?? 0) + 1;
+    coverage.formats[entry.format] = (coverage.formats[entry.format] ?? 0) + 1;
+    if (entry.cached) coverage.cached_sources += 1;
+    if (!["supported", "workspace_filtered"].includes(entry.coverage_status) || entry.status === "not_attempted") {
+      coverage.gap_count += 1;
+      pushCapped(coverage.gap_details, entry);
+    }
+  }
+  coverage.status = summary.candidate_rollouts === 0 ? "empty"
+    : coverage.gap_count > 0 || entries.length !== summary.candidate_rollouts ? "partial" : "complete";
+  summary.coverage = coverage;
+  if (summary.source_results) summary.source_results = entries;
 }
 
 function normalizeWorkspaceRoots(value) {
@@ -619,7 +948,12 @@ function loadLatestSnapshotsByLocator({ catalog, catalogRoot }) {
 
 function deriveSnapshotMetadata({ record, catalogRoot }) {
   const payloadPath = path.join(catalogRoot, record.verbatim_payload_ref);
-  const payload = JSON.parse(fs.readFileSync(payloadPath, "utf8"));
+  let payload;
+  try {
+    payload = JSON.parse(fs.readFileSync(payloadPath, "utf8"));
+  } catch {
+    throw new Error("Codex existing snapshot payload could not be read as JSON.");
+  }
   return deriveSnapshotMetadataFromPayload(payload);
 }
 
@@ -637,7 +971,18 @@ function deriveSnapshotMetadataFromPayload(payload) {
       typeof payload.archived === "boolean"
         ? payload.archived
         : isArchivedSourcePath(String(payload.source_rollout_path || "")),
+    messages,
   };
+}
+
+function requiresSnapshotRepair({ parsed, latestSnapshot }) {
+  if (!latestSnapshot) return false;
+  const oldMessages = latestSnapshot.metadata.messages;
+  const sameSource = parsed.sourceHash === latestSnapshot.record.source_hash;
+  const sameOrEarlierCheckpoint = new Date(parsed.lastVisibleMessageAt).getTime()
+    <= new Date(latestSnapshot.record.captured_at).getTime();
+  if (!sameSource && !sameOrEarlierCheckpoint) return false;
+  return !haveSameVisibleMessages(oldMessages, parsed.visibleMessages);
 }
 
 function determineCheckpoint({ parsed, latestSnapshot }) {
@@ -804,7 +1149,7 @@ function diffEvidenceRecords(existingRecord, nextRecord) {
   return keys.filter((key) => normalizeComparableValue(existingRecord[key]) !== normalizeComparableValue(nextRecord[key]));
 }
 
-function isEquivalentLegacyCodexSnapshot(existingRecord, nextRecord) {
+function isEquivalentLegacyCodexSnapshot(existingRecord, nextRecord, { existingMessages, nextMessages } = {}) {
   return (
     existingRecord.evidence_id === nextRecord.evidence_id &&
     normalizeComparableValue(existingRecord.workspace_id) === normalizeComparableValue(nextRecord.workspace_id) &&
@@ -813,8 +1158,14 @@ function isEquivalentLegacyCodexSnapshot(existingRecord, nextRecord) {
     existingRecord.substrate_ref === nextRecord.substrate_ref &&
     existingRecord.source_locator === nextRecord.source_locator &&
     existingRecord.captured_at === nextRecord.captured_at &&
-    existingRecord.source_hash === nextRecord.source_hash
+    existingRecord.source_hash === nextRecord.source_hash &&
+    haveSameVisibleMessages(existingMessages, nextMessages)
   );
+}
+
+function haveSameVisibleMessages(existingMessages, nextMessages) {
+  return Array.isArray(existingMessages) && Array.isArray(nextMessages)
+    && JSON.stringify(existingMessages) === JSON.stringify(nextMessages);
 }
 
 function normalizeComparableValue(value) {

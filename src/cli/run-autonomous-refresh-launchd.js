@@ -30,6 +30,8 @@ async function main() {
     log_rotation: logRotation,
     error_count: summary.errors.length,
     warning_count: summary.warnings.length,
+    codex_capture_coverage_status: summary.codex_capture_coverage?.status ?? "unavailable",
+    codex_capture_gap_count: summary.codex_capture_coverage?.gap_count ?? null,
   })}\n`);
   if (!summary.ok) {
     process.exitCode = 1;

@@ -24,7 +24,18 @@ Refresh Codex-native conversation evidence from local Codex storage into
 npm run refresh:codex
 ```
 
-This reads from `~/.codex` by default and imports printed `user_message` and `agent_message` events from Codex rollout files.
+This reads from `~/.codex` by default. Supported printed bodies come from legacy
+`user_message` / `agent_message` events and current completed `UserMessage` /
+`AgentMessage` items. Current completed items are authoritative for printed
+text; internal response projections can contain injected context, inherited
+history or extra citation markup and are not interchangeable with that text.
+
+Body text, whitespace and legitimate repeated messages are preserved. Current
+capture records source identity and available citation/phase provenance.
+Nontext content is counted as excluded: this path does not preserve attachment
+bytes or claim complete UI fidelity. Unsupported associations and ambiguous
+inherited history remain explicit coverage gaps. Private reasoning, tool
+results and nested compaction histories are not conversation body text.
 
 This manual import command does not rebuild derived semantic state. The
 autonomous refresh wrapper performs the final LanceDB sync after all canonical
@@ -34,7 +45,12 @@ refresh and promotion stages complete.
 
 Codex rollout refresh now follows a checkpoint policy instead of writing a new snapshot for every changed file.
 
-Unchanged rollout files are skipped early through a local import-state fingerprint ledger under the catalog root.
+Unchanged rollout files are skipped early through a local import-state fingerprint
+ledger under the catalog root. Parser compatibility is part of the checkpoint:
+legacy entries are reconsidered after a parser upgrade, and cached no-visible or
+unsupported outcomes remain coverage gaps rather than becoming successful
+captures. Unknown state versions or malformed checkpoint entries are rejected
+without silently discarding unrelated history.
 
 Changed threads create a new immutable evidence snapshot only when one of these conditions is true:
 
@@ -45,6 +61,76 @@ Changed threads create a new immutable evidence snapshot only when one of these 
 - at least `100` printed messages were added since the latest imported snapshot
 
 Changed threads that do not cross one of those checkpoints are intentionally not written into canonical evidence on that refresh.
+
+## Bounded Compatibility Backfill
+
+Use a reviewed source manifest to restrict a repair to exact native files and
+observed source bytes. Each entry binds the source path, its SHA-256 hash and
+the literal session thread ID:
+
+```json
+{
+  "version": 1,
+  "sources": [
+    {
+      "path": "/absolute/native/sessions/rollout-example.jsonl",
+      "sha256": "sha256:<64 lowercase hexadecimal characters>",
+      "thread_id": "<literal session_meta.id>"
+    }
+  ]
+}
+```
+
+Preview before capture:
+
+```bash
+npm run refresh:codex -- --source-manifest /absolute/path/manifest.json --dry-run
+npm run refresh:codex -- --source-manifest /absolute/path/manifest.json
+```
+
+Selected sources must be regular files under the allowed native session/archive
+roots. All selected paths, hashes, thread identities, extraction results and
+immutable compatibility are checked before writes. Processing uses the same
+bytes that passed preflight. A changing source requires a newly observed and
+verified boundary; never silently expand a manifest or substitute a different
+thread. A partial final JSON record is not complete source evidence.
+
+Manifest repair preserves unselected checkpoint entries and suppresses
+case-seed linking. It does not promote cases, invariants or tactics. Existing
+immutable evidence is not replaced; incompatible prior content is reported as
+`repair_required` for a separately specified correction.
+
+Retain the manifest and complete per-source results. Repeating a successful
+manifest must not create duplicate snapshots. After a write failure, inspect
+the exact committed/uncertain state before resuming: preflight is not a
+transactional rollback guarantee. Reverting code does not remove or rewrite
+evidence already captured.
+
+Run a controlled batch with other scheduled and manual capture writers idle.
+The import-state lock protects checkpoint publication; it does not serialize
+the entire catalog and payload import. Existing snapshots, including legacy
+ones, require compatible visible message bodies before checkpoint reuse.
+
+## Coverage and Integrity
+
+The import and refresh summaries expose `coverage` separately from process
+success. It accounts for candidates, source dispositions, cached sources and
+explicit gaps. `complete`, `partial` and `empty` describe the observed scope
+under the supported printed-text contract; they are not guarantees that every
+historical conversation, attachment, host or cloud account was archived.
+
+The autonomous report forwards this as `codex_capture_coverage` and emits a
+warning for partial coverage. The compact scheduled-run output includes its
+status and gap count. Missing coverage is `unavailable`, never zero gaps or
+complete capture. A top-level `ok: true` establishes process execution only.
+
+Capture coverage and payload integrity are separate checks. Before a backfill,
+record the existing catalog and payload hashes. After capture, independently
+compare the selected source bodies and identities with stored payloads, verify
+payload hashes and idempotence, and confirm old evidence is byte-identical.
+Source hashes identify the exact observed source boundary; an active native
+rollout may subsequently grow. Neither matching hashes nor successful capture
+establishes backup or permanent retention guarantees.
 
 ## Manual Snapshot Command
 

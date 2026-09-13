@@ -56,6 +56,7 @@ async function runAutonomousRefresh({
     catalog_root: resolvedCatalogRoot,
     workspace_id: resolveWorkspaceId({ catalogRoot: resolvedCatalogRoot }),
     codex: null,
+    codex_capture_coverage: null,
     agent_ops: null,
     parameters: null,
     cases: null,
@@ -69,6 +70,17 @@ async function runAutonomousRefresh({
   summary.codex = await captureStage(summary, "codex", () => refreshCodexIndexImpl({
     catalogRoot: resolvedCatalogRoot,
   }));
+  const codexFailure = summary.errors.find((entry) => entry.stage === "codex");
+  summary.codex_capture_coverage = summary.codex?.coverage
+    ?? codexFailure?.error?.summary?.coverage
+    ?? null;
+  if (summary.codex_capture_coverage?.status === "partial") {
+    recordStageWarning(summary, {
+      stage: "codex",
+      message: "Codex conversation capture has explicit coverage gaps; process success does not establish complete capture.",
+      details: summary.codex_capture_coverage,
+    });
+  }
   summary.agent_ops = await captureStage(summary, "agent_ops", () => refreshAgentOpsIndexImpl({
     catalogRoot: resolvedCatalogRoot,
   }));

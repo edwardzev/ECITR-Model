@@ -4,6 +4,52 @@ const path = require("node:path");
 
 const { runAutonomousRefresh } = require("../src/cli/refresh-autonomous");
 
+test("successful autonomous execution exposes incomplete Codex capture separately", async () => {
+  const coverage = {
+    status: "partial",
+    candidate_rollouts: 35,
+    accounted_rollouts: 35,
+    gap_count: 35,
+    cached_sources: 35,
+    source_statuses: { no_visible_messages: 35 },
+  };
+  const result = await runAutonomousRefresh({
+    skipLanceDbSync: true,
+    refreshCodexIndexImpl: () => ({ coverage }),
+    refreshAgentOpsIndexImpl: () => ({}),
+    refreshParametersImpl: () => ({ errors: 0, conflicts: 0 }),
+    refreshCasesImpl: () => ({ errors: 0 }),
+    runGovernedPromotionImpl: () => ({ support_graph: { status: "updated" } }),
+    now: () => "2026-09-13T10:00:00.000Z",
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.codex_capture_coverage, coverage);
+  assert.equal(result.warnings.length, 1);
+  assert.equal(result.warnings[0].stage, "codex");
+  assert.deepEqual(result.warnings[0].details, coverage);
+});
+
+test("failed Codex capture retains its known coverage and unavailable stays unknown", async () => {
+  for (const coverage of [{ status: "partial", gap_count: 1 }, null]) {
+    const result = await runAutonomousRefresh({
+      skipLanceDbSync: true,
+      refreshCodexIndexImpl() {
+        const error = new Error("source preflight rejected");
+        error.summary = coverage ? { coverage } : {};
+        throw error;
+      },
+      refreshAgentOpsIndexImpl: () => ({}),
+      refreshParametersImpl: () => ({ errors: 0, conflicts: 0 }),
+      refreshCasesImpl: () => ({ errors: 0 }),
+      runGovernedPromotionImpl: () => ({ support_graph: { status: "updated" } }),
+      now: () => "2026-09-13T10:00:00.000Z",
+    });
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.codex_capture_coverage, coverage);
+    assert.equal(result.warnings.length, coverage ? 1 : 0);
+  }
+});
+
 test("autonomous refresh still refreshes the support graph after upstream failures", async () => {
   const events = [];
 
