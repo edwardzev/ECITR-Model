@@ -24,22 +24,25 @@ Run from the project workspace so marker discovery and workspace attribution rem
   --query "specific task, failure, parameter, or decision" \
   --task-id "stable-task-id" \
   --task-title "short task title" \
+  --session-file "/absolute/agent-ops/memory/sessions/YYYY/MM/session_....json" \
+  --lane governed-write \
   --trigger discretionary
 ```
 
-When an existing memory session or episode reference is available, pass its literal
-`--session-ref` or `--episode-id` with `--thread-ref` and `--lane` as applicable.
-For `--session-ref`, copy the exact `session_ref` returned by `open_memory_session`,
-including `memory/sessions/YYYY/MM/` and `.json`. Its bare `session_...` ID does not
-resolve as a session reference. The runtime reads the task project from that
-canonical session; no separate task-project flag is needed. If the task's project
-and the retrieval workspace intentionally differ, add
-`--task-workspace-relation cross_workspace`. This declares that relationship;
-it does not change retrieval scope or grant cross-project authority. Missing or
-invalid attribution stays visible as an unjoined opportunity.
-Use that same lifecycle identity on retries and no-consult records. The wrappers
-assign the opportunity and attempt automatically; do not add a separate logging
-call before a search. Missing lifecycle identity is reported as unjoined coverage.
+Use the known agent-ops owner root plus the exact `session_ref` returned by
+`open_memory_session` for the absolute file path. The runtime validates its owner,
+ID and project, and carries its literal session and stored thread references.
+No new file or session lookup is needed. Choose
+the actual lane; the example is not a default. Alternatively, pass the returned
+canonical `--session-ref memory/sessions/YYYY/MM/session_....json` and applicable
+`--thread-ref`/`--episode-id` directly. Bare IDs are not session references.
+If task project and retrieval workspace intentionally differ, also declare
+`--task-workspace-relation cross_workspace`; this grants no execution authority.
+Check `memory_invocation.episode_attribution`: missing or invalid direct context
+stays unjoined; an invalid `--session-file` fails before capture. Conflicting
+file/flag identities are rejected. Reuse the same context and task ID throughout
+the episode. For an actual retry, also pass `--retry-of` with the prior attempt
+ID. The wrapper creates the opportunity and attempt; do not log before searching.
 
 Use `--trigger preflight` or `--trigger failure_retry` only when that is the actual reason for consultation. Keep queries concrete and scoped; do not treat broad lexical matches as proof.
 
@@ -61,21 +64,30 @@ Reading updates the same invocation with a preparation receipt. It does not prov
 
 ## Record Outcome
 
-After every search, call the usage wrapper exactly once with the returned `memory_invocation.invocation_id`. Include only record IDs that materially influenced the work. Call it even when no record was used:
+After every search, call the usage wrapper with that search's exact
+`memory_invocation.usage_followthrough.invocation_id`. Each retry has its own
+target; a sibling callback does not cover it. Include only materially influential
+IDs and an existing decision/output reference when available:
 
 ```bash
 ~/.codex/skills/ecitr-memory/scripts/record_memory_usage \
   --invocation-id "meminv_..." \
-  --used-record-ids "case_...,tactic_..." \
-  --selected-record-ids "case_...,tactic_..."
+  --used-record-ids "case_..." \
+  --use-evidence '{"record_id":"case_...","output_ref":"/absolute/task/output.md#decision"}'
 ```
+
+Repeat `--use-evidence` for additional links. When no returned record influenced
+the work, call the wrapper with only `--invocation-id` for an explicit empty
+callback. Never manufacture empty callbacks, use or references to fill gaps.
 
 If an eligible substantive task ends without a search, log exactly one opportunity and do not also log a no-consult opportunity for a task that already searched:
 
 ```bash
 ~/.codex/skills/ecitr-memory/scripts/log_memory_opportunity \
   --task-id "stable-task-id" \
-  --task-title "short task title"
+  --task-title "short task title" \
+  --session-file "/absolute/agent-ops/memory/sessions/YYYY/MM/session_....json" \
+  --lane diagnostic
 ```
 
 The no-consult wrapper also accepts `--query`, `--trigger` and
@@ -88,13 +100,11 @@ after capture starts, its error envelope supplies `memory_invocation` so the
 existing callback can still record no returned influence. A missing marker or
 other pre-capture failure exposes a capture gap and creates no fallback artifact.
 
-The usage wrapper optionally accepts `--inspected-record-ids` and
-`--use-evidence-file`, containing decision/output and independent-support
-reference declarations. These remain self-reports until independently verified.
-When memory materially influences a decision or output, include its existing
-`decision_ref` or `output_ref` with the used record ID. Do not manufacture use or
-evidence to fill telemetry. References remain optional; reported use without them
-is recorded with an explicit reference-coverage gap.
-An empty callback and no recorded callback remain separate states.
+The callback also accepts `--selected-record-ids`, `--inspected-record-ids` and
+the existing `--use-evidence-file` array. References remain optional declarations,
+not independently verified influence or benefit. Callback output lists used IDs
+without references; invocation reports list exact missing callback targets and
+reference gaps. Check those results instead of treating one callback as episode
+coverage. An empty callback and a missing callback remain separate states.
 
 Use retrieved records as guidance only after checking their scope, lifecycle state, provenance, and applicability to the current source state.

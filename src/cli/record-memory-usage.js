@@ -2,6 +2,7 @@
 
 const path = require("node:path");
 const fs = require("node:fs");
+const { buildUseEvidence } = require("../runtime/project-memory-telemetry");
 
 const { DEFAULT_CATALOG_ROOT } = require("../cases/case-refresh");
 const { ProjectMemorySurface } = require("../runtime/project-memory");
@@ -19,7 +20,10 @@ function main() {
     usedRecordIds: options.usedRecordIds,
     selectedRecordIds: options.selectedRecordIds,
     inspectedRecordIds: options.inspectedRecordIds,
-    useEvidence: options.useEvidenceFile ? JSON.parse(fs.readFileSync(options.useEvidenceFile, "utf8")) : [],
+    useEvidence: [
+      ...(options.useEvidenceFile ? JSON.parse(fs.readFileSync(options.useEvidenceFile, "utf8")) : []),
+      ...options.useEvidence,
+    ],
   });
 
   process.stdout.write(`${JSON.stringify({
@@ -39,6 +43,7 @@ function parseArgs(args) {
     selectedRecordIds: [],
     inspectedRecordIds: [],
     useEvidenceFile: null,
+    useEvidence: [],
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -65,6 +70,14 @@ function parseArgs(args) {
       case "--use-evidence-file":
         options.useEvidenceFile = path.resolve(args[++index]);
         break;
+      case "--use-evidence": {
+        const value = args[++index];
+        if (typeof value !== "string" || Buffer.byteLength(value) > 8192) throw new Error("Invalid inline use evidence.");
+        try { options.useEvidence.push(JSON.parse(value)); }
+        catch { throw new Error("Invalid inline use evidence JSON."); }
+        buildUseEvidence({ useEvidence: options.useEvidence });
+        break;
+      }
       case "--selected-record-ids":
         options.selectedRecordIds = splitList(args[++index]);
         break;

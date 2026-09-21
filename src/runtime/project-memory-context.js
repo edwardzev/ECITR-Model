@@ -128,6 +128,41 @@ function inspectEpisodeAttribution({ projectConfig, context = {}, now, sourceMap
   return result;
 }
 
+// Explicit convenience input only: select one existing owner file, never search
+// a thread or choose its latest session. The ordinary literal-reference path
+// remains available and retains its existing unresolved/invalid telemetry.
+function contextFromSessionFile({ sessionFile, projectConfig, context = {}, now = new Date(), sourceMapPath = DEFAULT_SOURCE_MAP_PATH }) {
+  try {
+    if (!text(sessionFile) || !path.isAbsolute(sessionFile) || path.resolve(sessionFile) !== sessionFile) {
+      fail("session_file_not_canonical");
+    }
+    const sourceMap = readSource(sourceMapPath, "source_map");
+    const configuredRegistry = sourceMap.data.agent_ops_registry_path ?? process.env.AGENT_OPS_PROJECT_REGISTRY;
+    if (!text(configuredRegistry)) fail("owner_registry_not_configured", "unresolved");
+    const registryPath = path.resolve(path.dirname(sourceMap.ref), configuredRegistry);
+    if (path.basename(registryPath) !== "_registry.json" || path.basename(path.dirname(registryPath)) !== "projects"
+      || path.basename(path.dirname(path.dirname(registryPath))) !== "memory") fail("owner_registry_layout_invalid");
+    const ownerRoot = path.dirname(path.dirname(path.dirname(registryPath)));
+    const sessionRef = path.relative(ownerRoot, sessionFile);
+    if (!SESSION_REF.test(sessionRef)) fail("session_file_outside_owner_layout");
+    const sessionSource = readSource(sessionFile, "session", ownerRoot);
+    const derived = { session_ref: sessionRef, thread_ref: sessionSource.data.thread_ref ?? null };
+    for (const [key, value] of Object.entries(derived)) {
+      if (context[key] != null && context[key] !== value) fail("session_file_context_conflict");
+    }
+    const resolved = { ...context, ...derived };
+    const inspected = inspectEpisodeAttribution({ projectConfig, context: resolved, now, sourceMapPath });
+    if (inspected.status !== "verified") fail(inspected.reason, inspected.status);
+    if (inspected.source_map.ref !== sourceMap.ref || inspected.source_map.sha256 !== sourceMap.sha256
+      || inspected.registry.ref !== registryPath || inspected.session.sha256 !== sessionSource.sha256) {
+      fail("session_file_source_changed", "unresolved");
+    }
+    return resolved;
+  } catch (error) {
+    throw readerError(error.reason ?? "session_file_unavailable");
+  }
+}
+
 function assertOpportunityContext({ artifact, projectConfig, taskPacket, context, inspected }) {
   const old = artifact.telemetry?.opportunity;
   if (!old) throw readerError("opportunity_context_unavailable");
@@ -155,4 +190,4 @@ function assertOpportunityContext({ artifact, projectConfig, taskPacket, context
   // Capture hashes and a later reciprocal run are intentionally not rebound.
 }
 
-module.exports = { inspectEpisodeAttribution, assertOpportunityContext, DEFAULT_SOURCE_MAP_PATH, SOURCE_LIMIT_BYTES, SESSION_REF, RUN_REF };
+module.exports = { inspectEpisodeAttribution, contextFromSessionFile, assertOpportunityContext, DEFAULT_SOURCE_MAP_PATH, SOURCE_LIMIT_BYTES, SESSION_REF, RUN_REF };

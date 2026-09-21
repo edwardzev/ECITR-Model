@@ -7,7 +7,7 @@ const { summarizeTelemetryArtifacts } = require("./project-memory-telemetry-repo
 const { inspectEpisodeAttribution, assertOpportunityContext } = require("./project-memory-context");
 const {
   validateTelemetry, buildOpportunity, startAttempt, observeBackend, getBackendObservation,
-  buildUseEvidence, isTelemetryExcluded, unavailable,
+  buildUseEvidence, describeUsageFollowthrough, isTelemetryExcluded, unavailable,
 } = require("./project-memory-telemetry");
 
 const { buildSemanticEmbedder } = require("../retrieval/embedders/factory");
@@ -433,6 +433,7 @@ class ProjectMemorySurface {
             used_memory: nextArtifact.used_memory,
             used_returned_record_ids: nextArtifact.used_returned_record_ids,
             selected_record_ids: nextArtifact.selected_record_ids,
+            usage_followthrough: describeUsageFollowthrough(nextArtifact),
           },
         };
       },
@@ -642,6 +643,7 @@ function writeMemoryInvocation({
 }
 
 function invocationSummary(artifact, artifactPath) {
+  const attribution = artifact.telemetry?.opportunity?.attribution;
   return {
     invocation_id: artifact.invocation_id,
     artifact_path: artifactPath,
@@ -650,6 +652,16 @@ function invocationSummary(artifact, artifactPath) {
     returned_counts: artifact.returned_counts,
     returned_record_ids: artifact.returned_record_ids,
     retrieval_gate: artifact.retrieval_gate,
+    usage_followthrough: describeUsageFollowthrough(artifact),
+    episode_attribution: {
+      status: attribution?.status ?? "legacy_unverified",
+      reason: attribution?.reason ?? (attribution ? null : "source_attribution_not_recorded"),
+      session_ref: artifact.telemetry?.opportunity?.binding?.session_ref ?? null,
+      thread_ref: artifact.telemetry?.opportunity?.binding?.thread_ref ?? null,
+      task_project_id: attribution?.task_project_id ?? null,
+      retrieval_workspace_id: artifact.workspace_id,
+      workspace_relation: attribution?.workspace_relation ?? null,
+    },
     ...(artifact.telemetry ? { opportunity_id: artifact.telemetry.opportunity.opportunity_id,
       decision: artifact.telemetry.opportunity.decision, attempt: artifact.telemetry.attempt } : {}),
   };

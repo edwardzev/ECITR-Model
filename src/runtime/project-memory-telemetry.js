@@ -206,7 +206,22 @@ function buildUseEvidence({ inspectedRecordIds = [], useEvidence = [] } = {}) {
   };
 }
 
+function describeUsageFollowthrough(artifact) {
+  const recorded = typeof artifact.usage_recorded_at === "string";
+  const linked = new Set((artifact.use_evidence?.links ?? [])
+    .filter((entry) => entry.decision_ref || entry.output_ref).map((entry) => entry.record_id));
+  const used = recorded && artifact.used_memory === true
+    ? artifact.used_returned_record_ids ?? artifact.used_record_ids ?? [] : [];
+  return {
+    invocation_id: artifact.invocation_id,
+    attempt_id: artifact.telemetry?.attempt?.attempt_id ?? null,
+    callback_status: artifact.memory_consulted !== true ? "not_applicable" : recorded ? "recorded" : "missing",
+    used_record_ids_without_references: used.filter((id) => !linked.has(id)),
+  };
+}
+
 module.exports = {
   validateTelemetry, buildOpportunity, startAttempt, hashLocalFile, observeBackend, getBackendObservation,
   buildUseEvidence, validateTelemetryContext, isTelemetryExcluded, unavailable,
+  describeUsageFollowthrough,
 };
