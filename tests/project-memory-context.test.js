@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
-const { inspectEpisodeAttribution, SOURCE_LIMIT_BYTES } = require("../src/runtime/project-memory-context");
+const { inspectEpisodeAttribution, contextFromSessionFile, SOURCE_LIMIT_BYTES } = require("../src/runtime/project-memory-context");
 const { buildOpportunity, validateTelemetry } = require("../src/runtime/project-memory-telemetry");
 const { ProjectMemorySurface, loadMemoryInvocationArtifacts } = require("../src/runtime/project-memory");
 const { summarizeTelemetryArtifacts } = require("../src/runtime/project-memory-telemetry-report");
@@ -57,6 +57,47 @@ test("canonical session establishes source metadata without an invented outcome"
   const telemetry = buildOpportunity({ projectConfig: f.config, context: f.context, taskPacket: TASK, now: NOW, sourceMapPath: f.sourceMapPath });
   assert.equal(telemetry.schema_version, 2);
   assert.equal(validateTelemetry(telemetry), telemetry);
+});
+
+test("explicit session file supplies only canonical source identity and preserves caller context", (t) => {
+  const f = fixture(t);
+  const resolve = (context = {}) => contextFromSessionFile({ sessionFile: f.sessionPath, projectConfig: f.config,
+    context, sourceMapPath: f.sourceMapPath, now: NOW });
+  assert.deepEqual(resolve({ lane: "diagnostic" }), { lane: "diagnostic", session_ref: SESSION, thread_ref: THREAD });
+  assert.deepEqual(resolve(f.context), f.context);
+  for (const context of [{ session_ref: "session_bare" }, { thread_ref: "other_thread" }]) {
+    assert.throws(() => resolve(context), { code: "session_file_context_conflict" });
+  }
+  write(f.sessionPath, { ...read(f.sessionPath), thread_ref: null });
+  assert.equal(resolve().thread_ref, null);
+  assert.throws(() => resolve({ thread_ref: THREAD }), { code: "session_file_context_conflict" });
+  assert.equal(fs.existsSync(f.surface.artifactRoot), false);
+});
+
+test("session file rejects aliases, outside-owner files, malformed sources and undeclared cross-workspace context", (t) => {
+  const f = fixture(t, { workspaceId: "other_project" });
+  const resolve = (sessionFile = f.sessionPath, context = { task_workspace_relation: "cross_workspace" }) =>
+    contextFromSessionFile({ sessionFile, projectConfig: f.config, context, sourceMapPath: f.sourceMapPath, now: NOW });
+  assert.equal(resolve().session_ref, SESSION);
+  assert.throws(() => resolve(f.sessionPath, {}), { code: "cross_workspace_relation_not_declared" });
+  for (const input of [SESSION, f.sessionPath.replace("/09/", "/09/../09/"), `file://${f.sessionPath}`]) {
+    assert.throws(() => resolve(input), { code: "session_file_not_canonical" });
+  }
+  assert.throws(() => resolve(path.join(f.root, SESSION)), { code: "session_file_outside_owner_layout" });
+  const original = read(f.sessionPath);
+  write(f.sessionPath, { ...original, id: "session_wrong" });
+  assert.throws(() => resolve(), { code: "session_identity_invalid" });
+  write(f.sessionPath, { ...original, project_id: "unregistered" });
+  assert.throws(() => resolve(), { code: "session_project_not_registered" });
+  fs.writeFileSync(f.sessionPath, "{malformed");
+  assert.throws(() => resolve(), { code: "session_invalid_json" });
+  fs.writeFileSync(f.sessionPath, "x".repeat(SOURCE_LIMIT_BYTES + 1));
+  assert.throws(() => resolve(), { code: "session_input_budget_exceeded" });
+  write(f.sessionPath, original);
+  fs.renameSync(f.sessionPath, `${f.sessionPath}.real`);
+  fs.symlinkSync(`${f.sessionPath}.real`, f.sessionPath);
+  assert.throws(() => resolve(), { code: "session_path_not_canonical" });
+  assert.equal(fs.existsSync(f.surface.artifactRoot), false);
 });
 
 test("missing context and bare or aliased references never become exact", (t) => {

@@ -1,5 +1,5 @@
 const { structuralHash, readerError } = require("./project-memory-reader");
-const { unavailable, validateTelemetry } = require("./project-memory-telemetry");
+const { unavailable, validateTelemetry, describeUsageFollowthrough } = require("./project-memory-telemetry");
 
 const TRIGGERS = ["discretionary", "preflight", "failure_retry", "explicit_request"];
 const unique = (values) => [...new Set(values)].sort();
@@ -148,6 +148,12 @@ function summarizeTelemetryArtifacts(input, { eligiblePopulation = null } = {}) 
     const linked = new Set((artifact.use_evidence?.links ?? []).filter((entry) => entry.decision_ref || entry.output_ref).map((entry) => entry.record_id));
     return { artifact, missing: (artifact.used_returned_record_ids ?? artifact.used_record_ids ?? []).filter((id) => !linked.has(id)) };
   });
+  const callbackDetails = consulted.map((artifact) => ({
+    workspace_id: artifact.workspace_id ?? null,
+    catalog_root: artifact.catalog_root ?? null,
+    opportunity_id: artifact.telemetry?.opportunity?.opportunity_id ?? null,
+    ...describeUsageFollowthrough(artifact),
+  }));
   return {
     report_schema_version: 3,
     recorded_invocations: artifacts.length,
@@ -193,6 +199,11 @@ function summarizeTelemetryArtifacts(input, { eligiblePopulation = null } = {}) 
     usage_callbacks: callbacks.length,
     usage_callback_rate: ratio(callbacks.length, consulted.length),
     missing_callbacks: consulted.length - callbacks.length,
+    usage_followthrough: {
+      scope: "loaded_accepted_invocations_only",
+      missing_callback_invocations: callbackDetails.filter((entry) => entry.callback_status === "missing"),
+      missing_use_reference_invocations: callbackDetails.filter((entry) => entry.used_record_ids_without_references.length > 0),
+    },
     explicit_empty_callbacks: callbacks.filter((entry) => (entry.used_record_ids ?? []).length === 0
       && (entry.selected_record_ids ?? []).length === 0 && (entry.use_evidence?.inspected_record_ids ?? []).length === 0).length,
     reported_no_influence_callbacks: callbacks.filter((entry) => entry.used_memory === false).length,

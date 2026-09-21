@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const path = require("node:path");
-const { readTelemetryOption, captureGap } = require("./project-memory-telemetry-options");
+const { readTelemetryOption, resolveTelemetryOptions, captureGap } = require("./project-memory-telemetry-options");
 
 const { DEFAULT_CATALOG_ROOT } = require("../cases/case-refresh");
 const { ProjectMemorySurface } = require("../runtime/project-memory");
@@ -13,12 +13,13 @@ function main() {
   if (!resolved.projectConfig.marker_path) throw new Error("A governed workspace marker is required before telemetry capture.");
   if (options.catalogRootExplicit && options.catalogRoot !== resolved.projectConfig.catalog_root) throw new Error("Explicit catalog root does not match workspace marker.");
   if (options.workspaceId && options.workspaceId !== resolved.projectConfig.workspace_id) throw new Error("Explicit workspace identity does not match marker.");
+  const telemetryContext = resolveTelemetryOptions(options, resolved.projectConfig);
   const surface = new ProjectMemorySurface({
     projectConfig: resolved.projectConfig,
     artifactRoot: resolved.artifactRoot,
   });
   const invocation = surface.logTaskOpportunity({
-    telemetryContext: options.telemetryContext ?? {},
+    telemetryContext,
     query: options.query,
     trigger: options.trigger ?? "discretionary",
     taskPacket: {

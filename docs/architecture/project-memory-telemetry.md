@@ -109,7 +109,10 @@ load, corpus fingerprint and retrieval phases are separately measured. Initial
 artifact creation and terminal persistence are outside that duration; external
 workflow measurements must include their cost. Gate duration belongs to the
 opportunity. Phase durations are not model tokens and summed overlapping
-attempt durations are not wall-clock duration or user-active time.
+attempt durations are not wall-clock duration or user-active time. Recorded
+elapsed intervals can include scheduling delay and machine suspension; they are
+not CPU time and must not be automatically subtracted or reinterpreted without
+separate evidence.
 
 Corpus hashes use `ecitr-structural-json-v1` over the loaded catalog snapshot.
 The shared search factory observes its actual backend ID and, where present,
@@ -164,6 +167,14 @@ comparison; legacy artifacts are excluded from the new task denominator.
 Unavailable/unsupported metadata remains a coverage gap. Reported use is never
 renamed actual use or benefit.
 
+The additive `usage_followthrough` report contains
+`missing_callback_invocations` and `missing_use_reference_invocations`, with
+literal workspace/catalog/opportunity/invocation/attempt identities and missing
+used-record references. Its scope is the loaded, accepted invocation population;
+it cannot enumerate absent artifacts. A callback on a later sibling attempt does
+not satisfy an earlier attempt. Producing the report performs no callbacks or
+reference repair.
+
 Exact duplicate deliveries deduplicate. Compatible pending-to-terminal and
 receipt-superset snapshots can progress. Contradictory immutable identities,
 terminal results, callbacks, receipt contents or incomparable snapshot forks
@@ -190,11 +201,35 @@ tracking ID just for telemetry. No-consult also accepts `--query` and `--trigger
 so shadow observation uses the actual task/trigger. A search failure that reached
 the producer returns the persisted invocation identity in its error envelope.
 
-Usage adds `--inspected-record-ids` and `--use-evidence-file` (the bounded array
-of reference declarations described above). Existing search, selected-reader
-and empty-usage callbacks remain supported. No additional callback is required
-for reading or telemetry collection.
+As an explicit convenience, `--session-file` selects the exact absolute path of
+an existing canonical session under the configured owner root. It derives the
+canonical session reference and stored thread reference from that one file,
+then uses the existing owner/session/project attribution checks. It rejects
+relative paths, traversal, symlinks, files outside the owner layout, malformed
+identity and conflicting explicit flags before artifact creation. It does not
+scan sessions, infer a current thread, create a sidecar, change owner routing or
+choose a newest session. Missing stored thread identity remains null. An explicit
+cross-workspace declaration is still necessary for unequal projects; no lane,
+run outcome or business authority is inferred. Current direct flags retain their
+existing behavior, including visible invalid/unresolved attribution. Conflicting
+repeated telemetry options are rejected rather than letting their order erase an
+earlier identity or audit boundary; identical repeats are accepted.
+
+Search/skip responses now expose compact `episode_attribution` status/reason and
+literal identities. `usage_followthrough` gives the exact invocation/attempt
+target and `missing`, `recorded` or `not_applicable` callback state. The callback
+response additionally lists used record IDs missing decision/output references.
+These are derived response fields, not new persisted ledgers or enforcement.
+
+Usage accepts `--inspected-record-ids`, `--use-evidence-file` (the bounded array
+of reference declarations described above), and repeatable `--use-evidence`
+JSON objects with the same fields. Inline objects are bounded to 8 KiB each;
+combined links retain the existing 100-link and per-field limits. File and inline
+entries are combined without inventing associations or following references.
+Existing search, selected-reader and empty-usage callbacks remain supported.
+No additional callback is required for reading or telemetry collection.
 
 Tests may inject `telemetrySourceMapPath` into `ProjectMemorySurface` to use an
 isolated owner fixture. CLI wrappers keep the existing checkout source-map route;
-there is no new arbitrary owner-root CLI override. See [ADR 0013](../adr/0013-project-memory-episode-attribution.md).
+there is no new arbitrary owner-root CLI override. See [ADR 0013](../adr/0013-project-memory-episode-attribution.md)
+and [ADR 0014](../adr/0014-project-memory-workflow-followthrough.md).
