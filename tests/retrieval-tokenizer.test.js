@@ -112,3 +112,54 @@ test("hash and hybrid sparse embeddings declare the Unicode tokenizer version", 
   });
   assert.match(hybridEmbedder.embeddingSignature, new RegExp(`sparse-${RETRIEVAL_TOKENIZER_ID}`));
 });
+
+// Literal pre-optimization algorithm: retain an independent oracle for the fast path.
+function priorNormalization(value) {
+  const decomposed = String(value ?? "").normalize("NFKD").toLowerCase();
+  let normalized = "";
+  let previousBaseWasLatin = false;
+  for (const character of decomposed) {
+    if (/\p{M}/u.test(character)) {
+      if (!previousBaseWasLatin) normalized += character;
+      continue;
+    }
+    normalized += character;
+    previousBaseWasLatin = /\p{Script=Latin}/u.test(character);
+  }
+  return normalized.normalize("NFC");
+}
+
+test("ASCII fast path matches the previous algorithm for every code point including surrogate values", () => {
+  for (let code = 0; code <= 0x10ffff; code += 1) {
+    const value = String.fromCodePoint(code);
+    const expected = priorNormalization(value);
+    const actual = normalizeRetrievalText(value);
+    if (actual !== expected) assert.equal(actual, expected, `code point ${code}`);
+  }
+  assert.equal(RETRIEVAL_TOKENIZER_ID, "unicode-v2");
+});
+
+test("ASCII fast path preserves combining state, malformed UTF-16 and token options on deterministic mixed strings", () => {
+  const words = new Set(["a", "an", "and", "for", "from", "how", "of", "or", "should", "the", "to"]);
+  const values = [null, undefined, 0, true, "no not ECITR_LANCEDB_URI", "e\u0301\u0323 !\u0301\u0323",
+    "\u0000\u0301\n\u0301\u007f\u0301", "Àİſ\u0301 Æ\u0301", "שָׁלוֹם ذاكرة Йिe\u0301",
+    "💠\u0301 𐐀e\u0301", "\ud800a\udfff\u0301", "a\u0301\u0301_\u0301-\u0301"];
+  for (let code = 0; code < 128; code += 1) values.push(`e\u0301${String.fromCharCode(code)}\u0301\u0323ש\u0301`);
+  let seed = 0x51e1c7;
+  const alphabet = ["a", "Z", "_", "-", " ", "\u0301", "\u0323", "\u034f", "\u0000", "\u007f", "\ud800", "\udfff", "İ", "é", "ſ", "א", "ي", "Й", "💠", "𐐀", "ﬁ", "项"];
+  for (let index = 0; index < 2048; index += 1) {
+    let value = "";
+    for (let position = 0; position < 32; position += 1) {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      value += alphabet[seed % alphabet.length];
+    }
+    values.push(value);
+  }
+  for (const value of values) {
+    const expected = priorNormalization(value);
+    assert.equal(normalizeRetrievalText(value), expected);
+    const tokens = expected.match(/[\p{L}\p{N}\p{M}_]+/gu) ?? [];
+    assert.deepEqual(tokenizeRetrievalText(value, { removeStopWords: false }), tokens);
+    assert.deepEqual(tokenizeRetrievalText(value), tokens.filter((token) => !words.has(token)));
+  }
+});

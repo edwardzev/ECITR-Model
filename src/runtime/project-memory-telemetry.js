@@ -212,11 +212,21 @@ function describeUsageFollowthrough(artifact) {
     .filter((entry) => entry.decision_ref || entry.output_ref).map((entry) => entry.record_id));
   const used = recorded && artifact.used_memory === true
     ? artifact.used_returned_record_ids ?? artifact.used_record_ids ?? [] : [];
+  const prepared = new Set((artifact.read_receipts ?? []).flatMap((receipt) => receipt.results ?? [])
+    .filter((entry) => entry.result === "available").map((entry) => entry.record_id));
   return {
     invocation_id: artifact.invocation_id,
     attempt_id: artifact.telemetry?.attempt?.attempt_id ?? null,
     callback_status: artifact.memory_consulted !== true ? "not_applicable" : recorded ? "recorded" : "missing",
     used_record_ids_without_references: used.filter((id) => !linked.has(id)),
+    application_review: {
+      claim_basis: "caller_reported_influence",
+      prepared_used_record_ids: used.filter((id) => prepared.has(id)),
+      used_record_ids_without_available_read_receipts: used.filter((id) => !prepared.has(id)),
+      preparation_scope: "available_at_receipt_time_only",
+      specific_application: unavailable("applicability_not_independently_reviewed"),
+      measured_benefit: unavailable("matched_task_outcomes_not_evaluated"),
+    },
   };
 }
 

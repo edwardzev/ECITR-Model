@@ -142,6 +142,13 @@ result has `record_id`, `layer`, `result` (`available`, `empty`, `denied`, `stal
 metadata. Missing sources are `empty`; none of these states implies attention
 or applicability to a live task.
 
+The derived `application_review` envelope provides concise caller guidance to
+check inclusion and exclusion conditions against current task facts and to
+distinguish specific application from analogy in an existing decision/output
+reference. It is reserved inside the same response budget before record bodies,
+does not modify canonical records or receipts, and does not certify semantic
+application. Full operative conditions are never shortened to fit the guidance.
+
 The same invocation retains at most 20 distinct `read_receipts`, containing
 selection/excerpt request, result metadata, hashes/spans and `prepared_at`, but
 no body or excerpt text. The duplicate key includes ordered selection, excerpt
@@ -190,6 +197,43 @@ The tokenizer contract is:
 - retain Hebrew, Arabic, Cyrillic, CJK, and other non-Latin scripts
 - remove only the small shared relevance stop-word set
 - retain negation such as `no` and `not`
+
+The implementation has an ASCII fast path after the same NFKD/lowercase pass.
+ASCII has no combining marks, and only a-z set the Latin-base flag. All
+non-ASCII processing and final NFC remain unchanged. Differential tests against
+the prior algorithm cover every code point, surrogate values, mixed scripts and
+combining sequences. This changes execution cost, not `unicode-v2` semantics or
+embedding signatures.
+
+Each retrieval execution owns a fresh payload snapshot map, shared by its
+factory index-basis check, lexical/semantic/temporal lanes and indexed-backend
+basis assertion. The map reuses payload-derived segments only within that
+execution. It is not stored on a catalog, runtime or backend; later executions
+observe file edits, removal and creation. Standalone text reads are fresh by
+default. Both complete correction-graph validations and indexed basis checks
+still run. No ranking, fusion, scope, expiry or index qualification is cached.
+
+Index synchronization similarly owns a fresh map shared by row export and basis
+publication across the asynchronous embedding/table-write step. This keeps the
+written rows and basis tied to one payload snapshot. An intervening payload edit
+is detected by the next fresh basis check instead of producing a matching basis
+for stale rows. It does not make the file-backed catalog an atomic filesystem
+snapshot or permit canonical evidence edits.
+
+The synthetic performance benchmark can create a new fixture directory and run
+the same input through two source checkouts:
+
+```bash
+node src/cli/benchmark-retrieval-performance.js create --fixture-root /tmp/ecitr-performance-fixture --evidence-count 1000
+node src/cli/benchmark-retrieval-performance.js run --fixture-root /tmp/ecitr-performance-fixture --runtime-root /path/to/checkout --iterations 2
+```
+
+It preserves fixture hashes and full response/diagnostic hashes, checks input
+preservation, and reports catalog-load, fingerprint and retrieval timings. Run
+baseline and candidate in separate processes with alternating order. Its
+heuristic backend and absent graph do not establish installed indexed-path or
+ordinary-task speed. First-process query is distinct from cold filesystem
+caches, and overlapping lane elapsed times must not be summed.
 
 Tokenizer changes are derived-index compatibility changes. Hash and OpenAI
 hybrid embedding signatures include the tokenizer version. A local LanceDB

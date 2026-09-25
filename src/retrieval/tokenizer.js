@@ -37,6 +37,14 @@ function normalizeRetrievalText(value) {
   let previousBaseWasLatin = false;
 
   for (const character of decomposed) {
+    // ASCII contains no combining marks; after lowercasing only a-z are Latin.
+    // Keep the Unicode state machine for every non-ASCII character unchanged.
+    const code = character.charCodeAt(0);
+    if (code <= 0x7f) {
+      normalized += character;
+      previousBaseWasLatin = code >= 0x61 && code <= 0x7a;
+      continue;
+    }
     if (MARK_PATTERN.test(character)) {
       if (!previousBaseWasLatin) {
         normalized += character;

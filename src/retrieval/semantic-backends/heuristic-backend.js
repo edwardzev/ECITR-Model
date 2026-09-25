@@ -15,7 +15,7 @@ class HeuristicSemanticBackend extends SemanticRetrievalBackend {
     this.parameterIndexes = buildParameterIndexes(catalogs);
   }
 
-  async retrieve({ request, plan }) {
+  async retrieve({ request, plan, payloadSnapshots = new Map() }) {
     const queryTokens = semanticTokens(request.query);
     const candidates = [];
 
@@ -26,6 +26,7 @@ class HeuristicSemanticBackend extends SemanticRetrievalBackend {
         }
         const haystack = getSemanticText(layer, record, this.atomicClaimsByEvidence, this.parameterIndexes, {
           catalogRoot: this.catalogs?.__catalogRoot,
+          payloadSnapshots,
         });
         const score = scoreSoftOverlap(queryTokens, semanticTokens(haystack));
         if (score <= 0) {
@@ -80,7 +81,7 @@ function getRecordId(layer, record) {
   }
 }
 
-function getSemanticText(layer, record, atomicClaimsByEvidence, parameterIndexes, { catalogRoot } = {}) {
+function getSemanticText(layer, record, atomicClaimsByEvidence, parameterIndexes, { catalogRoot, payloadSnapshots } = {}) {
   switch (layer) {
     case "tactics":
       return [
@@ -115,6 +116,7 @@ function getSemanticText(layer, record, atomicClaimsByEvidence, parameterIndexes
         catalogRoot,
         atomicClaims: atomicClaimsByEvidence.get(record.evidence_id) ?? [],
         parameterIndexes,
+        payloadSnapshots,
       });
     default:
       return "";

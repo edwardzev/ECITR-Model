@@ -145,6 +145,27 @@ and matched outcome evaluation exist. An empty callback, reported no influence,
 and no recorded callback are different states. Receipt preparation does not
 prove attention, host delivery or influence.
 
+The reader's compact `application_review` guidance asks the caller to compare
+current task facts with inclusion and exclusion conditions. Use the existing
+decision or output reference to distinguish a specific supported application,
+a broad analogy, and a rejected application. No new form, classification input
+or automatic semantic evaluator is introduced. For example, a case about a
+data-seed selector can inform row-effect verification of another data seed. An
+explicit schema-only exclusion rules out applying that case to a schema-only
+migration; reusing its broad verification idea is an analogy. An analogy may be
+reported as influential, but cannot become demonstrated case application.
+
+Derived `usage_followthrough.application_review` lists
+`prepared_used_record_ids` and
+`used_record_ids_without_available_read_receipts`. Preparation means available
+at receipt time only, not current eligibility or semantic application. Its
+`specific_application` and `measured_benefit` remain unavailable. The report's
+`use_stages.specific_application` likewise stays unavailable regardless of
+receipt, inspected-ID or reference coverage. References are not followed, and
+legacy callbacks without receipts remain accepted. Inspected but rejected
+records may retain selected/inspected IDs with no used IDs. Empty and explicit
+no-influence callbacks remain supported.
+
 ## Reporting and coverage
 
 Report version 3 groups versioned opportunities and counts attempts separately.
