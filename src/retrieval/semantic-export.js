@@ -7,7 +7,7 @@ const { getRecordWorkspaceId } = require("../workspace/identity");
 
 const SEMANTIC_EXPORT_LAYERS = Object.freeze(["tactics", "invariants", "cases", "evidence"]);
 
-function buildSemanticExportRecords(catalogs, { embeddingSignature = null } = {}) {
+function buildSemanticExportRecords(catalogs, { embeddingSignature = null, payloadSnapshots = new Map() } = {}) {
   assertSemanticCatalogs(catalogs);
   const currentCatalogs = withCurrentEvidenceRecords(catalogs);
 
@@ -25,6 +25,7 @@ function buildSemanticExportRecords(catalogs, { embeddingSignature = null } = {}
       const contextualText = buildContextualText(layer, record, atomicClaimsByEvidence, {
         catalogRoot: currentCatalogs.__catalogRoot,
         parameterIndexes,
+        payloadSnapshots,
       });
       const exportRecord = {
         layer,
@@ -80,7 +81,7 @@ async function embedSemanticExportRecords({ exportedRecords, embedder } = {}) {
   });
 }
 
-function buildContextualText(layer, record, atomicClaimsByEvidence, { catalogRoot, parameterIndexes } = {}) {
+function buildContextualText(layer, record, atomicClaimsByEvidence, { catalogRoot, parameterIndexes, payloadSnapshots } = {}) {
   const header = [
     `Layer: ${layer}.`,
     `Workspace: ${getSemanticWorkspaceId(layer, record) ?? "unscoped"}.`,
@@ -126,6 +127,7 @@ function buildContextualText(layer, record, atomicClaimsByEvidence, { catalogRoo
           catalogRoot,
           atomicClaims: atomicClaimsByEvidence.get(record.evidence_id) ?? [],
           parameterIndexes,
+          payloadSnapshots,
         }),
       ].join(" ");
     default:

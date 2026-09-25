@@ -5,9 +5,8 @@ const { buildParameterSummaryForRecord } = require("../parameters/retrieval");
 
 const MAX_SEGMENTS = 128;
 const MAX_TEXT_LENGTH = 16000;
-const payloadCache = new Map();
 
-function buildEvidenceRetrievalText(record, { catalogRoot, atomicClaims = [], parameterIndexes = null } = {}) {
+function buildEvidenceRetrievalText(record, { catalogRoot, atomicClaims = [], parameterIndexes = null, payloadSnapshots = null } = {}) {
   const segments = [
     `Evidence id: ${record.evidence_id}.`,
     `Source locator: ${record.source_locator}.`,
@@ -28,10 +27,7 @@ function buildEvidenceRetrievalText(record, { catalogRoot, atomicClaims = [], pa
     segments.push(`Parent evidence id: ${record.parent_evidence_id}.`);
   }
 
-  const payload = loadEvidencePayload(record, { catalogRoot });
-  if (payload) {
-    segments.push(...flattenPayloadValue(payload));
-  }
+  segments.push(...loadEvidenceSegments(record, { catalogRoot, payloadSnapshots }));
 
   if (Array.isArray(atomicClaims) && atomicClaims.length > 0) {
     segments.push(`Claims: ${atomicClaims.join(" ")}.`);
@@ -45,14 +41,14 @@ function buildEvidenceRetrievalText(record, { catalogRoot, atomicClaims = [], pa
   return compactSegments(segments);
 }
 
-function loadEvidencePayload(record, { catalogRoot } = {}) {
+function loadEvidenceSegments(record, { catalogRoot, payloadSnapshots } = {}) {
   const payloadPath = resolvePayloadPath(record, { catalogRoot });
   if (!payloadPath) {
-    return null;
+    return [];
   }
 
-  if (payloadCache.has(payloadPath)) {
-    return payloadCache.get(payloadPath);
+  if (payloadSnapshots?.has(payloadPath)) {
+    return payloadSnapshots.get(payloadPath);
   }
 
   let payload = null;
@@ -62,9 +58,12 @@ function loadEvidencePayload(record, { catalogRoot } = {}) {
   } catch {
     payload = null;
   }
+  const segments = payload ? flattenPayloadValue(payload) : [];
 
-  payloadCache.set(payloadPath, payload);
-  return payload;
+  // The caller may reuse this snapshot only within one retrieval/sync operation.
+  // Standalone reads have no retained cache; later file edits and misses are visible.
+  payloadSnapshots?.set(payloadPath, segments);
+  return segments;
 }
 
 function resolvePayloadPath(record, { catalogRoot } = {}) {

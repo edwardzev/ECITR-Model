@@ -312,6 +312,10 @@ function prepareSelectedRecords({ catalog, artifact, recordIds, evidenceExcerpt 
     invocation_id: artifact.invocation_id,
     workspace_id: artifact.workspace_id,
     receipt: { receipt_id: `read_${"0".repeat(64)}`, prepared_at: preparedAt, reused: false, claim: "content_prepared_not_delivery_or_attention" },
+    application_review: {
+      status: "caller_review_required",
+      guidance: "Compare current task facts with the record's inclusion and exclusion conditions. A matching exclusion rules out that specific application. Distinguish supported application from a broad analogy in the existing decision/output reference. A prepared record or reference does not verify application or benefit; report no influence when appropriate.",
+    },
     results: prepared.map((result) => result.result === "available"
       ? { ...withoutContent(result), result: "denied", reason: "budget_exceeded", content_kind: "none" }
       : result),

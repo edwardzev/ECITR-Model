@@ -490,7 +490,7 @@ function createProjectMemoryRetrievalRuntime({
   return new RetrievalRuntime({
     responseEnricher,
     graphRoot,
-    lanesFactory({ catalogs, canonicalCatalogs = catalogs, plan }) {
+    lanesFactory({ catalogs, canonicalCatalogs = catalogs, plan, payloadSnapshots }) {
       const indexed = tableExists({
         uri: effectiveLanceDbUri,
         tableName: effectiveLanceDbTableName,
@@ -498,6 +498,7 @@ function createProjectMemoryRetrievalRuntime({
         catalogs: canonicalCatalogs,
         expectedEmbeddingSignature: () => getEmbedder().embeddingSignature ?? null,
         constrainDefaultUriToDefaultCatalog,
+        payloadSnapshots,
       });
       const semanticBackend = indexed
         ? buildLanceDbBackend({
@@ -523,6 +524,7 @@ function localLanceDbTableExists({
   expectedEmbeddingSignature = null,
   constrainDefaultUriToDefaultCatalog = false,
   fsImpl = fs,
+  payloadSnapshots,
 } = {}) {
   if (!uri || !tableName || /^[a-z]+:\/\//i.test(String(uri))) {
     return false;
@@ -564,6 +566,7 @@ function localLanceDbTableExists({
     catalogs,
     embeddingSignature,
     fsImpl,
+    payloadSnapshots,
   });
 }
 

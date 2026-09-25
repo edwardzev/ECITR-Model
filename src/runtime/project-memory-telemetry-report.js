@@ -223,6 +223,7 @@ function summarizeTelemetryArtifacts(input, { eligiblePopulation = null } = {}) 
         reported_use_callbacks: used.length,
       } : null,
       independently_corroborated_use: unavailable("independent_verifier_not_run"),
+      specific_application: unavailable("applicability_not_independently_reviewed"),
       measured_benefit: unavailable("matched_task_outcomes_not_evaluated"),
     },
     timing: {

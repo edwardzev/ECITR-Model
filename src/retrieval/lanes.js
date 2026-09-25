@@ -15,7 +15,7 @@ class LexicalLane extends RetrievalLane {
     this.parameterIndexes = buildParameterIndexes(catalogs);
   }
 
-  async execute({ request, plan }) {
+  async execute({ request, plan, payloadSnapshots = new Map() }) {
     const queryTokens = tokenizeRetrievalText(request.query);
     const candidates = [];
 
@@ -27,6 +27,7 @@ class LexicalLane extends RetrievalLane {
         const haystack = getSearchText(layer, record, {
           catalogRoot: this.catalogs?.__catalogRoot,
           parameterIndexes: this.parameterIndexes,
+          payloadSnapshots,
         });
         const score = scoreTokenOverlap(queryTokens, tokenizeRetrievalText(haystack));
         if (score <= 0) {
@@ -84,8 +85,8 @@ class SemanticLane extends RetrievalLane {
     this.backend = assertSemanticRetrievalBackend(backend);
   }
 
-  async execute({ request, plan, now }) {
-    return this.backend.retrieve({ request, plan, now });
+  async execute({ request, plan, now, payloadSnapshots }) {
+    return this.backend.retrieve({ request, plan, now, payloadSnapshots });
   }
 }
 
@@ -98,7 +99,7 @@ class TemporalLane extends RetrievalLane {
     this.catalogs = catalogs;
   }
 
-  async execute({ request, plan, now }) {
+  async execute({ request, plan, now, payloadSnapshots = new Map() }) {
     const candidates = [];
     const queryTokens = tokenizeRetrievalText(request.query);
     const recencySensitive =
@@ -117,6 +118,7 @@ class TemporalLane extends RetrievalLane {
         }
         const searchText = getSearchText(layer, record, {
           catalogRoot: this.catalogs?.__catalogRoot,
+          payloadSnapshots,
         });
         const overlapScore = scoreTokenOverlap(queryTokens, tokenizeRetrievalText(searchText));
         if (overlapScore <= 0) {
@@ -183,7 +185,7 @@ function getRecordId(layer, record) {
   }
 }
 
-function getSearchText(layer, record, { catalogRoot, parameterIndexes } = {}) {
+function getSearchText(layer, record, { catalogRoot, parameterIndexes, payloadSnapshots } = {}) {
   switch (layer) {
     case "tactics":
       return [
@@ -207,6 +209,7 @@ function getSearchText(layer, record, { catalogRoot, parameterIndexes } = {}) {
       return buildEvidenceRetrievalText(record, {
         catalogRoot,
         parameterIndexes,
+        payloadSnapshots,
       });
     default:
       return "";

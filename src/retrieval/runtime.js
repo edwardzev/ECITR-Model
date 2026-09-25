@@ -21,13 +21,15 @@ class RetrievalRuntime {
   async execute({ request, catalogs, now = new Date() }) {
     const currentCatalogs = withCurrentEvidenceRecords(catalogs);
     const plan = this.planner.plan(request);
+    const payloadSnapshots = new Map();
     const lanes = this.lanesFactory({
       catalogs: currentCatalogs,
       canonicalCatalogs: catalogs,
       plan,
+      payloadSnapshots,
     });
     const laneCandidates = await Promise.all(
-      lanes.map((lane) => lane.execute({ request, plan, now })),
+      lanes.map((lane) => lane.execute({ request, plan, now, payloadSnapshots })),
     );
     const fusedResponse = fuseCandidates({ request, plan, laneCandidates, now });
     const fusionDiagnostics = getFusionDiagnostics(fusedResponse);

@@ -60,6 +60,17 @@ The reader returns complete eligible case/invariant/tactic records. Evidence def
 
 Read results can be `available`, `empty`, `denied`, or `stale`. Do not substitute a correction or treat denied/budget-limited content as inspected. `legacy_unpinned` means current content was checked but its retrieval-time match is unknown; an invocation without its original request is denied. Respect prerequisites, negative applicability, fallbacks and rollback in the complete record.
 
+Compare the current task facts with the record's inclusion and exclusion
+conditions before claiming a specific application. State the decision in the
+existing task output, with the relevant condition and the concrete action it
+informed. A matching exclusion rules out that specific application. A general
+analogy can influence work, but the linked decision must identify it as an
+analogy rather than demonstrated application. For example, a data-seed case
+about verifying selected rows can apply to a data-seed repair; it does not apply
+to a schema-only change explicitly excluded by that case. Using its general
+verification idea for the schema change is only an analogy. Do not add another
+form or artifact solely for this distinction.
+
 Reading updates the same invocation with a preparation receipt. It does not prove host delivery, agent attention, use, usefulness, or execution authority. It does not set usage fields. Identical reads reuse a receipt; at most 20 distinct receipts are retained, with no eviction. The CLI emits no body if receipt persistence fails. Reader updates are also prohibited in a strict no-write audit.
 
 ## Record Outcome
@@ -79,6 +90,8 @@ IDs and an existing decision/output reference when available:
 Repeat `--use-evidence` for additional links. When no returned record influenced
 the work, call the wrapper with only `--invocation-id` for an explicit empty
 callback. Never manufacture empty callbacks, use or references to fill gaps.
+An inspected but rejected record may remain in `--inspected-record-ids` or
+`--selected-record-ids` without entering `--used-record-ids`.
 
 If an eligible substantive task ends without a search, log exactly one opportunity and do not also log a no-consult opportunity for a task that already searched:
 
@@ -106,5 +119,10 @@ not independently verified influence or benefit. Callback output lists used IDs
 without references; invocation reports list exact missing callback targets and
 reference gaps. Check those results instead of treating one callback as episode
 coverage. An empty callback and a missing callback remain separate states.
+The derived `application_review` distinguishes used IDs with an available
+preparation receipt from those without one. Preparation is only a receipt-time
+fact. Specific application and measured benefit remain unknown even when every
+used ID has a receipt and an output reference; assessing those requires actual
+task facts and independent evidence.
 
 Use retrieved records as guidance only after checking their scope, lifecycle state, provenance, and applicability to the current source state.

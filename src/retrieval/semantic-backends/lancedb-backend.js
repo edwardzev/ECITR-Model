@@ -71,16 +71,18 @@ class LanceDbSemanticBackend extends SemanticRetrievalBackend {
     return db.openTable(this.tableName);
   }
 
-  async buildRows({ catalogs = this.catalogs } = {}) {
+  async buildRows({ catalogs = this.catalogs, payloadSnapshots = new Map() } = {}) {
     return exportCatalogToLanceDbRows({
       catalogs,
       embedder: this.embedder,
+      payloadSnapshots,
     });
   }
 
   async syncCatalog({ catalogs = this.catalogs } = {}) {
     assertCatalogs(catalogs);
-    const rows = await this.buildRows({ catalogs });
+    const payloadSnapshots = new Map();
+    const rows = await this.buildRows({ catalogs, payloadSnapshots });
     clearLanceDbCatalogBasis({
       uri: this.uri,
       tableName: this.tableName,
@@ -107,6 +109,7 @@ class LanceDbSemanticBackend extends SemanticRetrievalBackend {
       catalogs,
       embeddingSignature: this.embedder.embeddingSignature ?? null,
       fsImpl: this.fsImpl,
+      payloadSnapshots,
     });
 
     return {
@@ -120,7 +123,7 @@ class LanceDbSemanticBackend extends SemanticRetrievalBackend {
     };
   }
 
-  async retrieve({ request, plan, catalogs = this.catalogs, now = new Date() }) {
+  async retrieve({ request, plan, catalogs = this.catalogs, now = new Date(), payloadSnapshots = new Map() }) {
     assertCatalogs(catalogs);
     assertLanceDbCatalogBasis({
       uri: this.uri,
@@ -128,6 +131,7 @@ class LanceDbSemanticBackend extends SemanticRetrievalBackend {
       catalogs,
       embeddingSignature: this.embedder.embeddingSignature ?? null,
       fsImpl: this.fsImpl,
+      payloadSnapshots,
     });
     const table = await this.openTable();
     const queryEmbedding = await this.embedder.embedQuery({ query: request.query });
@@ -158,10 +162,11 @@ class LanceDbSemanticBackend extends SemanticRetrievalBackend {
   }
 }
 
-async function exportCatalogToLanceDbRows({ catalogs, embedder } = {}) {
+async function exportCatalogToLanceDbRows({ catalogs, embedder, payloadSnapshots = new Map() } = {}) {
   assertCatalogs(catalogs);
   const exportedRecords = buildSemanticExportRecords(catalogs, {
     embeddingSignature: embedder.embeddingSignature ?? null,
+    payloadSnapshots,
   });
   const embeddedRecords = await embedSemanticExportRecords({ exportedRecords, embedder });
 
@@ -339,10 +344,12 @@ function buildLanceDbCatalogBasis({
   tableName,
   catalogs,
   embeddingSignature = null,
+  payloadSnapshots,
 } = {}) {
   assertCatalogs(catalogs);
   const exportedRecords = buildSemanticExportRecords(catalogs, {
     embeddingSignature,
+    payloadSnapshots,
   });
   const entries = exportedRecords
     .map((entry) => ({
@@ -375,6 +382,7 @@ function writeLanceDbCatalogBasis({
   catalogs,
   embeddingSignature = null,
   fsImpl = fs,
+  payloadSnapshots,
 } = {}) {
   const filePath = getLanceDbBasisPath({ uri, tableName });
   if (!filePath) {
@@ -385,6 +393,7 @@ function writeLanceDbCatalogBasis({
     tableName,
     catalogs,
     embeddingSignature,
+    payloadSnapshots,
   });
   const temporaryPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
   fsImpl.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -406,6 +415,7 @@ function isLanceDbCatalogBasisCurrent({
   catalogs,
   embeddingSignature = null,
   fsImpl = fs,
+  payloadSnapshots,
 } = {}) {
   const filePath = getLanceDbBasisPath({ uri, tableName });
   if (!filePath || !fsImpl.existsSync(filePath)) {
@@ -418,6 +428,7 @@ function isLanceDbCatalogBasisCurrent({
       tableName,
       catalogs,
       embeddingSignature,
+      payloadSnapshots,
     });
     return [
       "schema_version",
