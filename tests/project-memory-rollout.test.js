@@ -211,6 +211,7 @@ test("project memory doctor requires markers, current derived state, and install
     path.join("scripts", "search_project_memory"),
     path.join("scripts", "record_memory_usage"),
     path.join("scripts", "log_memory_opportunity"),
+    path.join("scripts", "report_memory_invocations"),
   ]) {
     const filePath = path.join(skillRoot, relativePath);
     fs.mkdirSync(path.dirname(filePath), { recursive: true });

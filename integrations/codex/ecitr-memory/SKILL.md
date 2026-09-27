@@ -29,8 +29,11 @@ Run from the project workspace so marker discovery and workspace attribution rem
   --trigger discretionary
 ```
 
-Use the known agent-ops owner root plus the exact `session_ref` returned by
-`open_memory_session` for the absolute file path. The runtime validates its owner,
+Pass the exact host-provided current `thread_ref` when opening memory, if it is
+available; never guess it from a workspace, title, latest session or shared daemon.
+Use the returned `lifecycle_context.session_file` (or the known agent-ops owner
+root plus its exact `session_ref`) for the absolute file path. Reuse that context
+for this episode's searches and explicit skip. The runtime validates its owner,
 ID and project, and carries its literal session and stored thread references.
 No new file or session lookup is needed. Choose
 the actual lane; the example is not a default. Alternatively, pass the returned
@@ -126,3 +129,33 @@ used ID has a receipt and an output reference; assessing those requires actual
 task facts and independent evidence.
 
 Use retrieved records as guidance only after checking their scope, lifecycle state, provenance, and applicability to the current source state.
+
+## Check The Episode Handoff
+
+Before normal closeout of an eligible substantive episode, check the existing
+invocation records for its exact session in each retrieval workspace actually
+used. Run from that workspace with the same context and any explicit
+cross-workspace relation used for the search or skip:
+
+```bash
+~/.codex/skills/ecitr-memory/scripts/report_memory_invocations \
+  --session-file "/absolute/agent-ops/memory/sessions/YYYY/MM/session_....json"
+```
+
+This extends the existing read-only invocation report; it does not retrieve
+memory, load the catalog or create another ledger. Missing callback entries name
+the exact invocation and attempt. Supply only truthful callbacks for this
+episode's searches, including a genuinely empty callback when nothing influenced
+the work. Never fabricate a callback to clear the report or repair historical
+gaps. No observed decision is not an explicit skip. Evidence/enumeration issues
+and unbound records remain unknown even when the missing-callback list is empty.
+
+Complete a trustworthy agent-ops summary even if a gap cannot be resolved, and
+disclose that gap. This check adds no gate inside `complete_memory_session`.
+After closeout, repeat the same read-only report to verify the session's explicit
+stored run reference and reciprocal session/project/thread linkage. An active
+session without a run is expected; a closed session without one is a gap. A
+reciprocal link proves the recorded relationship, not task quality or memory
+benefit. The report covers only the supplied workspace artifact root; it never
+finds other workspaces by guessing. `micro` and strict no-write exclusions still
+apply.

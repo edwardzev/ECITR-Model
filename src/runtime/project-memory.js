@@ -709,6 +709,72 @@ function loadMemoryInvocationArtifacts({ artifactRoot, since = null, until = nul
     });
 }
 
+// Opt-in report reader. The historical aggregate keeps its existing behavior;
+// an exact-session check must expose unreadable sources instead of dropping them.
+function loadMemoryInvocationArtifactsStrict({ artifactRoot, maxFiles = 5000, maxBytes = 32 * 1024 * 1024 }) {
+  const root = path.resolve(artifactRoot);
+  const artifacts = [];
+  const issues = [];
+  const snapshots = [];
+  const directories = [];
+  let files = 0;
+  let bytes = 0;
+  let stopped = false;
+  const issue = (file, reason) => issues.push({ path: file, reason });
+  const directoryState = (stat) => [stat.dev, stat.ino, stat.mtimeMs, stat.ctimeMs].join(":");
+  function visit(directory, depth = 0) {
+    if (stopped) return;
+    if (depth > 32 || directories.length >= maxFiles) {
+      issue(directory, "invocation_report_budget_exceeded"); stopped = true; return;
+    }
+    try {
+      const stat = fs.lstatSync(directory);
+      if (!stat.isDirectory() || fs.realpathSync(directory) !== directory) {
+        issue(directory, "invocation_directory_not_canonical"); return;
+      }
+      directories.push({ path: directory, state: directoryState(stat) });
+      for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+        if (stopped) break;
+        const file = path.join(directory, entry.name);
+        if (entry.isSymbolicLink()) { issue(file, "invocation_symlink_not_followed"); continue; }
+        if (entry.isDirectory()) { visit(file, depth + 1); continue; }
+        if (!entry.name.endsWith(".json")) continue;
+        if (!entry.isFile()) { issue(file, "invocation_not_regular"); continue; }
+        if (++files > maxFiles || bytes + fs.lstatSync(file).size > maxBytes) {
+          issue(file, "invocation_report_budget_exceeded"); stopped = true; break;
+        }
+        try {
+          const snapshot = readInvocationSnapshot(file, file);
+          bytes += snapshot.bytes.length;
+          const artifact = JSON.parse(snapshot.text);
+          if (!artifact || typeof artifact !== "object" || Array.isArray(artifact)) throw readerError("invalid_invocation_shape");
+          artifacts.push({ artifact, path: file });
+          snapshots.push({ path: file, stat: snapshot.stat, sha256: crypto.createHash("sha256").update(snapshot.bytes).digest("hex") });
+        } catch (error) { issue(file, error.code ?? "invalid_invocation_json"); }
+      }
+    } catch (error) { issue(directory, error.code === "ENOENT" ? "invocation_directory_unavailable" : "invocation_directory_unreadable"); }
+  }
+  visit(root);
+  function verifyUnchanged() {
+    for (const snapshot of snapshots) {
+      try {
+        const current = readInvocationSnapshot(snapshot.path, snapshot.path);
+        if (!sameInvocationFileState(snapshot.stat, current.stat)
+          || crypto.createHash("sha256").update(current.bytes).digest("hex") !== snapshot.sha256) {
+          issue(snapshot.path, "invocation_source_changed_during_report");
+        }
+      } catch { issue(snapshot.path, "invocation_source_changed_during_report"); }
+    }
+    for (const directory of directories) {
+      try {
+        if (fs.realpathSync(directory.path) !== directory.path
+          || directoryState(fs.lstatSync(directory.path)) !== directory.state) issue(directory.path, "invocation_directory_changed_during_report");
+      } catch { issue(directory.path, "invocation_directory_changed_during_report"); }
+    }
+  }
+  return { artifacts, issues, files_examined: Math.min(files, maxFiles), bytes_read: bytes, verifyUnchanged };
+}
+
 function listJsonFiles(directory) {
   const files = [];
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -961,5 +1027,6 @@ module.exports = {
   localLanceDbTableExists,
   loadEcitrProjectConfig,
   loadMemoryInvocationArtifacts,
+  loadMemoryInvocationArtifactsStrict,
   summarizeMemoryInvocations,
 };
