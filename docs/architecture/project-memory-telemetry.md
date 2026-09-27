@@ -254,3 +254,48 @@ Tests may inject `telemetrySourceMapPath` into `ProjectMemorySurface` to use an
 isolated owner fixture. CLI wrappers keep the existing checkout source-map route;
 there is no new arbitrary owner-root CLI override. See [ADR 0013](../adr/0013-project-memory-episode-attribution.md)
 and [ADR 0014](../adr/0014-project-memory-workflow-followthrough.md).
+## Exact-session caller follow-through
+
+The existing invocation report accepts `--session-file` or a canonical
+`--session-ref`, plus an exact `--thread-ref`, `--run-ref` or explicit
+`--task-workspace-relation` when applicable. Installed callers may use
+`~/.codex/skills/ecitr-memory/scripts/report_memory_invocations`. The default
+aggregate mode is unchanged. Session mode rejects time/population filters that
+could hide another search's callback.
+
+This mode is a read-only projection over one supplied workspace artifact root.
+It resolves the existing agent-ops owner/registry/session contract, selects only
+explicit exact session bindings, and keeps every delivery of a matching
+invocation identity before duplicate-conflict quarantine. It reports individual
+missing callback targets, running attempts, missing use references and conflicting
+metadata. It does not guess an episode from a thread, title, date or newest file.
+An absent decision remains unobserved rather than an explicit skip.
+
+Native task identity is classified independently of source-verified session
+attribution. Before closeout a missing run is expected; afterward only the
+session's literal stored run reference may establish a reciprocal session,
+project and thread relationship. Its execution outcome remains a declaration,
+not verified business success. Report-only lifecycle fields are not persisted
+into historical invocation attribution or bindings.
+
+Strict enumeration uses the existing bounded no-follow invocation reader,
+records malformed/unreadable sources, rejects symlink traversal, and rereads
+source snapshots for concurrent change. The defaults stop at 5,000 JSON files
+or directories, depth 32, or 32 MiB of initial invocation bytes; a budget stop is
+incomplete coverage. A second read checks snapshot stability. Empty missing-
+callback lists cannot establish complete coverage when evidence or enumeration
+issues exist. Unbound records and other workspace roots remain outside exact
+episode attribution. Catalog availability is not required and no retrieval runs.
+
+The caller checks this projection before normal closeout, supplies only truthful
+callbacks for its known searches, and repeats it after closeout for stored-link
+readback. A gap does not prevent a trustworthy agent-ops summary. This adds no
+daemon dependency, watcher, ledger, automatic callback or lifecycle gate.
+
+The session projection validates each accepted invocation against the selected
+workspace, catalog and marker scope. Supplied run references require reciprocal
+owner verification. Callback evidence reuses the writer's bounds and reference
+rules, including the distinction between reported IDs and returned IDs. Invalid
+metadata is exposed as an evidence issue and cannot count as a valid callback.
+Explicit CLI workspace/catalog selectors that contradict the selected marker
+are rejected.

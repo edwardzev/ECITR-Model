@@ -33,6 +33,7 @@ const REQUIRED_SKILL_FILES = Object.freeze([
   path.join("scripts", "search_project_memory"),
   path.join("scripts", "record_memory_usage"),
   path.join("scripts", "log_memory_opportunity"),
+  path.join("scripts", "report_memory_invocations"),
 ]);
 
 function syncRegisteredProjectMemoryMarkers({

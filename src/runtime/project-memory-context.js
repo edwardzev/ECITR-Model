@@ -52,7 +52,7 @@ function readSource(filePath, kind, ownerRoot = null) {
   } finally { if (descriptor !== undefined) fs.closeSync(descriptor); }
 }
 
-function inspectEpisodeAttribution({ projectConfig, context = {}, now, sourceMapPath = DEFAULT_SOURCE_MAP_PATH }) {
+function inspectEpisodeAttribution({ projectConfig, context = {}, now, sourceMapPath = DEFAULT_SOURCE_MAP_PATH, includeLifecycle = false }) {
   const result = {
     status: "absent", reason: "session_ref_not_supplied", checked_at: now.toISOString(),
     task_project_id: null, retrieval_workspace_id: projectConfig.workspace_id, workspace_relation: null,
@@ -88,6 +88,13 @@ function inspectEpisodeAttribution({ projectConfig, context = {}, now, sourceMap
     result.session = { ref: context.session_ref, id: session.id, project_id: session.project_id,
       thread_ref: session.thread_ref ?? null, sha256: sessionSource.sha256 };
     result.task_project_id = session.project_id;
+    // Read-only report metadata. Existing capture callers retain their original
+    // schema; inspecting a later run never rewrites an invocation's binding.
+    if (includeLifecycle) result.lifecycle = {
+      session_status: session.status ?? null,
+      stored_run_ref: session.run_ref ?? null,
+      execution_outcome: null,
+    };
     result.workspace_relation = session.project_id === projectConfig.workspace_id ? "same_workspace" : "cross_workspace";
     if (context.thread_ref != null) {
       if (session.thread_ref == null) fail("session_thread_ref_unavailable", "unresolved");
@@ -111,6 +118,7 @@ function inspectEpisodeAttribution({ projectConfig, context = {}, now, sourceMap
       if (run.thread_ref != null && session.thread_ref != null && run.thread_ref !== session.thread_ref) fail("run_thread_ref_conflict");
       result.run = { ref: context.run_ref, id: run.id, project_id: run.project_id, session_ref: run.session_ref,
         thread_ref: run.thread_ref ?? null, sha256: runSource.sha256 };
+      if (includeLifecycle) result.lifecycle.execution_outcome = run.execution_outcome ?? null;
     }
     // The inspected sources form one stable capture, not an authority that can
     // survive changes while this inspection itself is still in progress.
